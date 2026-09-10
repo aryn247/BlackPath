@@ -1,56 +1,89 @@
-# Welcome to your Expo app 👋
+# BLACKPATH — Serverless Walking/Running App
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+[![Platform](https://img.shields.io/badge/Platform-Android%20%7C%20iOS-black.svg)](https://expo.dev)
+[![Expo](https://img.shields.io/badge/Expo-SDK%2057-000000.svg)](https://docs.expo.dev)
+[![License](https://img.shields.io/badge/License-MIT-white.svg)](LICENSE)
+[![Download APK](https://img.shields.io/badge/Download-Android%20APK-brightgreen.svg)](https://aryn247.github.io/Self-Portfolio/BlackPath.apk)
 
-## Get started
+**BlackPath** is a privacy-first, serverless walking/running application for Android and iOS built with Expo, React Native, TypeScript, SQLite, and Bluetooth Low Energy (BLE).
 
-1. Install dependencies
+The entire UI is pure black (`#000000`) with abstract glowing path rendering, real-time closed-loop detection, Shoelace enclosed area calculation ($m^2$), local SQLite persistence, and offline peer-to-peer walk sharing.
 
-   ```bash
-   npm install
-   ```
+---
 
-2. Start the app
+## 📱 Direct Download
 
-   ```bash
-   npx expo start
-   ```
+📥 **[Download BlackPath Android APK (Direct Download)](https://aryn247.github.io/Self-Portfolio/BlackPath.apk)**
 
-In the output, you'll find options to open the app in a
+---
 
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
+## 🖤 Core Idea & UX Identity
 
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
+- **Pure Black Interface**: `#000000` background everywhere. No maps, streets, buildings, coordinates, location names, or map tiles are ever displayed.
+- **Abstract Glowing Path**: Converts real GPS coordinates into a smooth glowing line with rounded caps and a pulsing glowing endpoint marker.
+- **Dual Glowing Paths**: Displays a bright white path (`#FFFFFF`) for your walk, and a subtle glowing violet path (`#A855F7`) for nearby peers when walking together.
+- **100% Serverless & Local-First**: Operates completely offline with Wi-Fi and mobile data turned off. Uses local SQLite for all session history, statistics, and settings. No accounts or cloud servers required.
 
-## Get a fresh project
+---
 
-When you're ready, run:
+## ⚙️ Tech Stack
 
+- **Framework**: Expo (SDK 57) + React Native + TypeScript
+- **Navigation**: Expo Router (File-based navigation)
+- **Location Tracking**: `expo-location` + `expo-task-manager` (High-accuracy foreground & background tracking)
+- **Path Renderer**: Dynamic abstract SVG glowing path vector engine
+- **Local Storage**: SQLite (`expo-sqlite`)
+- **Peer Discovery**: Serverless Bluetooth Low Energy (`react-native-ble-plx`)
+- **Local Notifications**: `expo-notifications`
+- **Build Configuration**: EAS Build preview profile (`com.blackpath.app`)
+
+---
+
+## 🚀 Key Features
+
+1. **Real GPS Tracking & Smoothing**: Filters GPS noise, teleportation spikes, and stationary jitter using moving average smoothing and Ramer-Douglas-Peucker simplification algorithms.
+2. **Loop Detection & Enclosed Area Claiming**: Automatically detects closed loops when returning within ~25 meters of your starting position and calculates enclosed area in square meters ($m^2$) using Equirectangular metric projection and Gauss's Shoelace formula.
+3. **BLE Nearby System (No Cloud)**:
+   - Broadcasts temporary anonymous 8-character hex IDs (`BP_XXXXXXXX`).
+   - Discovers nearby BlackPath walkers offline via BLE custom Service UUID (`0000FE99-0000-1000-8000-00805F9B34FB`).
+   - Peer invitation handshake (`JOIN` prompt, `ACCEPT`/`DECLINE` modal, `LEAVE WALK` state machine).
+   - Cooldown timer manager for `NOT NOW` responses.
+4. **History & Statistics**: Detailed session history with miniature abstract path previews, date, distance, duration, average pace, and claimed area, alongside aggregated statistics filtered by Today, Week, Month, and All Time.
+5. **Privacy Controls**: Discoverability toggles, notification preferences, unit selection (`km`/`mi`), permission status monitors, and local data reset actions.
+
+---
+
+## 🛠️ Local Development & Setup
+
+### Prerequisites
+- Node.js (>= 18.x)
+- npm or yarn
+- Expo Go app on physical phone (or Android Studio Emulator / iOS Simulator)
+
+### Installation
 ```bash
-npm run reset-project
+# Clone repository
+git clone https://github.com/aryn247/Walk.git
+cd Walk
+
+# Install dependencies
+npm install
+
+# Start Expo Metro Bundler
+npx expo start
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+### Running on Android / iOS
+```bash
+# Android (Emulator or physical device)
+npm run android
 
-### Other setup steps
+# iOS Simulator (macOS required)
+npm run ios
+```
 
-- To set up ESLint for linting, run `npx expo lint`, or follow our guide on ["Using ESLint and Prettier"](https://docs.expo.dev/guides/using-eslint/)
-- If you'd like to set up unit testing, follow our guide on ["Unit Testing with Jest"](https://docs.expo.dev/develop/unit-testing/)
-- Learn more about the TypeScript setup in this template in our guide on ["Using TypeScript"](https://docs.expo.dev/guides/typescript/)
+---
 
-## Learn more
+## 📄 License
 
-To learn more about developing your project with Expo, look at the following resources:
-
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
-
-## Join the community
-
-Join our community of developers creating universal apps.
-
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+MIT License — free for educational and non-commercial use.
