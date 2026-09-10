@@ -9,7 +9,9 @@ import {
   Alert,
   Platform,
   StatusBar,
+  Share,
 } from 'react-native';
+import QRCode from 'react-native-qrcode-svg';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors } from '../constants/theme';
@@ -94,6 +96,17 @@ export default function SettingsScreen() {
     );
   };
 
+  const handleShareApp = async () => {
+    try {
+      await Share.share({
+        message: 'Download BlackPath V1.0.2 - Private Serverless Walk Tracking App: https://github.com/aryn247/BlackPath/raw/main/BlackPath.apk',
+        url: 'https://github.com/aryn247/BlackPath/raw/main/BlackPath.apk',
+      });
+    } catch (e) {
+      console.warn('Share error:', e);
+    }
+  };
+
   const topPadding = Math.max(insets.top, Platform.OS === 'android' ? (StatusBar.currentHeight || 24) : 0) + 10;
   const bottomPadding = Math.max(insets.bottom, 20);
 
@@ -109,6 +122,31 @@ export default function SettingsScreen() {
       </View>
 
       <ScrollView contentContainerStyle={[styles.scrollContent, { paddingBottom: bottomPadding + 20 }]} showsVerticalScrollIndicator={false}>
+        {/* SHARE APP VIA QR CODE */}
+        <View style={styles.section}>
+          <Text style={styles.sectionHeader}>SHARE BLACKPATH</Text>
+          <View style={styles.qrCard}>
+            <Text style={styles.qrTitle}>INSTANT APK QR CODE</Text>
+            <Text style={styles.qrSubtitle}>
+              Scan with any camera or scanner to download BlackPath directly.
+            </Text>
+
+            <View style={styles.qrContainer}>
+              <QRCode
+                value="https://github.com/aryn247/BlackPath/raw/main/BlackPath.apk"
+                size={160}
+                backgroundColor="#FFFFFF"
+                color="#000000"
+              />
+            </View>
+
+            <TouchableOpacity style={styles.shareButton} activeOpacity={0.8} onPress={handleShareApp}>
+              <Ionicons name="share-outline" size={18} color="#000000" style={{ marginRight: 8 }} />
+              <Text style={styles.shareButtonText}>SHARE APK LINK</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
         {/* BLE Discovery Toggle */}
         <View style={styles.section}>
           <Text style={styles.sectionHeader}>SOCIAL & DISCOVERY</Text>
@@ -285,6 +323,55 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#1C1C1E',
     padding: 18,
+  },
+  qrCard: {
+    backgroundColor: '#0A0A0A',
+    borderRadius: 24,
+    borderWidth: 1,
+    borderColor: '#1C1C1E',
+    padding: 20,
+    alignItems: 'center',
+  },
+  qrTitle: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    letterSpacing: 2,
+    marginBottom: 4,
+  },
+  qrSubtitle: {
+    fontSize: 11,
+    fontWeight: '400',
+    color: '#8E8E93',
+    textAlign: 'center',
+    marginBottom: 16,
+  },
+  qrContainer: {
+    padding: 14,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    marginBottom: 16,
+    shadowColor: '#FFFFFF',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.2,
+    shadowRadius: 10,
+    elevation: 4,
+  },
+  shareButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    width: '100%',
+  },
+  shareButtonText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#000000',
+    letterSpacing: 2,
   },
   settingRow: {
     flexDirection: 'row',

@@ -4,12 +4,14 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
-  SafeAreaView,
   Dimensions,
   Modal,
   ScrollView,
+  Platform,
+  StatusBar,
 } from 'react-native';
 import { useRouter } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors } from '../constants/theme';
 import { useWalkStore, WalkStore } from '../store/walkStore';
 import { useSettingsStore } from '../store/settingsStore';
@@ -24,6 +26,7 @@ import { WalkSession } from '../types';
 
 export default function WalkScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const walkState = useWalkStore();
   const settings = useSettingsStore();
 
@@ -32,7 +35,10 @@ export default function WalkScreen() {
   const [isStopping, setIsStopping] = useState(false);
 
   const canvasWidth = Dimensions.get('window').width;
-  const canvasHeight = Dimensions.get('window').height * 0.52;
+  const canvasHeight = Dimensions.get('window').height * 0.50;
+
+  const topPadding = Math.max(insets.top, Platform.OS === 'android' ? (StatusBar.currentHeight || 24) : 0) + 12;
+  const bottomPadding = Math.max(insets.bottom, 24);
 
   // Handle Stop Walk Action
   const handleStopWalk = async () => {
@@ -56,9 +62,9 @@ export default function WalkScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <View style={styles.container}>
       {/* Top Bar Header */}
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: topPadding }]}>
         <Text style={styles.headerTitle}>
           {walkState.isSharedWalk ? 'SHARED WALK' : 'BLACKPATH'}
         </Text>
@@ -113,7 +119,7 @@ export default function WalkScreen() {
       </View>
 
       {/* Stop Walk Control Button */}
-      <View style={styles.footerContainer}>
+      <View style={[styles.footerContainer, { paddingBottom: bottomPadding }]}>
         <TouchableOpacity
           style={styles.stopButton}
           activeOpacity={0.8}
@@ -133,8 +139,8 @@ export default function WalkScreen() {
         animationType="slide"
         onRequestClose={handleSaveSummary}
       >
-        <SafeAreaView style={styles.summaryContainer}>
-          <ScrollView contentContainerStyle={styles.summaryContent}>
+        <View style={[styles.summaryContainer, { paddingTop: topPadding }]}>
+          <ScrollView contentContainerStyle={[styles.summaryContent, { paddingBottom: bottomPadding + 20 }]}>
             <Text style={styles.summaryHeaderTitle}>WALK COMPLETE</Text>
 
             {/* Primary Distance */}
@@ -210,9 +216,9 @@ export default function WalkScreen() {
               <Text style={styles.summarySaveText}>SAVE</Text>
             </TouchableOpacity>
           </ScrollView>
-        </SafeAreaView>
+        </View>
       </Modal>
-    </SafeAreaView>
+    </View>
   );
 }
 
