@@ -4,10 +4,12 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
-  SafeAreaView,
   ScrollView,
+  Platform,
+  StatusBar,
 } from 'react-native';
 import { useRouter } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors } from '../constants/theme';
 import { StatsSummary } from '../types';
 import { getStatsSummary } from '../services/database/db';
@@ -19,32 +21,32 @@ type PeriodFilter = 'today' | 'week' | 'month' | 'all';
 
 export default function StatisticsScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const settings = useSettingsStore();
 
   const [period, setPeriod] = useState<PeriodFilter>('all');
   const [stats, setStats] = useState<StatsSummary | null>(null);
-  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     loadStats(period);
   }, [period]);
 
   const loadStats = async (p: PeriodFilter) => {
-    setLoading(true);
     try {
       const summary = await getStatsSummary(p);
       setStats(summary);
     } catch (e) {
       console.warn('Error loading stats:', e);
-    } finally {
-      setLoading(false);
     }
   };
 
+  const topPadding = Math.max(insets.top, Platform.OS === 'android' ? (StatusBar.currentHeight || 24) : 0) + 10;
+  const bottomPadding = Math.max(insets.bottom, 20);
+
   return (
-    <SafeAreaView style={styles.container}>
+    <View style={styles.container}>
       {/* Header */}
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: topPadding }]}>
         <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
           <Ionicons name="chevron-back" size={24} color="#FFFFFF" />
         </TouchableOpacity>
@@ -67,7 +69,7 @@ export default function StatisticsScreen() {
         ))}
       </View>
 
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={[styles.scrollContent, { paddingBottom: bottomPadding + 20 }]} showsVerticalScrollIndicator={false}>
         {/* Primary Stat Card - Total Distance */}
         <View style={styles.primaryCard}>
           <Text style={styles.cardLabel}>TOTAL DISTANCE</Text>
@@ -141,7 +143,7 @@ export default function StatisticsScreen() {
           </View>
         </View>
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 }
 
@@ -155,7 +157,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 20,
-    paddingVertical: 16,
+    paddingBottom: 14,
     borderBottomWidth: 1,
     borderBottomColor: '#121214',
   },

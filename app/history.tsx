@@ -4,39 +4,36 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
-  SafeAreaView,
   FlatList,
   Alert,
-  Dimensions,
+  Platform,
+  StatusBar,
 } from 'react-native';
 import { useRouter } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors } from '../constants/theme';
 import { WalkSession } from '../types';
 import { deleteAllHistory, deleteSession, getAllSessions } from '../services/database/db';
 import { formatArea, formatDistance, formatDuration, formatPace } from '../geo/distance';
 import { useSettingsStore } from '../store/settingsStore';
-import { PathRenderer } from '../components/PathRenderer';
 import { Ionicons } from '@expo/vector-icons';
 
 export default function HistoryScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const settings = useSettingsStore();
   const [sessions, setSessions] = useState<WalkSession[]>([]);
-  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     loadHistory();
   }, []);
 
   const loadHistory = async () => {
-    setLoading(true);
     try {
       const data = await getAllSessions();
       setSessions(data);
     } catch (e) {
       console.warn('Failed to load history:', e);
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -72,6 +69,9 @@ export default function HistoryScreen() {
     );
   };
 
+  const topPadding = Math.max(insets.top, Platform.OS === 'android' ? (StatusBar.currentHeight || 24) : 0) + 10;
+  const bottomPadding = Math.max(insets.bottom, 20);
+
   const renderSessionItem = ({ item }: { item: WalkSession }) => {
     const formattedDate = new Date(item.startedAt).toLocaleDateString(undefined, {
       month: 'short',
@@ -98,7 +98,6 @@ export default function HistoryScreen() {
           </TouchableOpacity>
         </View>
 
-        {/* Main Metrics */}
         <View style={styles.metricsRow}>
           <View style={styles.metricItem}>
             <Text style={styles.metricValue}>
@@ -120,7 +119,6 @@ export default function HistoryScreen() {
           </View>
         </View>
 
-        {/* Area Claimed Badge if present */}
         {item.areaClaimed > 0 && (
           <View style={styles.areaBadge}>
             <Text style={styles.areaText}>{formatArea(item.areaClaimed)} CLAIMED</Text>
@@ -131,9 +129,9 @@ export default function HistoryScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <View style={styles.container}>
       {/* Top Header */}
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: topPadding }]}>
         <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
           <Ionicons name="chevron-back" size={24} color="#FFFFFF" />
         </TouchableOpacity>
@@ -160,11 +158,11 @@ export default function HistoryScreen() {
           data={sessions}
           keyExtractor={(item) => item.id}
           renderItem={renderSessionItem}
-          contentContainerStyle={styles.listContent}
+          contentContainerStyle={[styles.listContent, { paddingBottom: bottomPadding + 20 }]}
           showsVerticalScrollIndicator={false}
         />
       )}
-    </SafeAreaView>
+    </View>
   );
 }
 
@@ -178,7 +176,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 20,
-    paddingVertical: 16,
+    paddingBottom: 14,
     borderBottomWidth: 1,
     borderBottomColor: '#121214',
   },

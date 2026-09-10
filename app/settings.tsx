@@ -4,12 +4,14 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
-  SafeAreaView,
   ScrollView,
   Switch,
   Alert,
+  Platform,
+  StatusBar,
 } from 'react-native';
 import { useRouter } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors } from '../constants/theme';
 import { useSettingsStore, SettingsStore } from '../store/settingsStore';
 import { PermissionService, PermissionState } from '../services/permissions/PermissionService';
@@ -18,6 +20,7 @@ import { Ionicons } from '@expo/vector-icons';
 
 export default function SettingsScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const settings = useSettingsStore();
 
   const [permissions, setPermissions] = useState<PermissionState>({
@@ -91,10 +94,13 @@ export default function SettingsScreen() {
     );
   };
 
+  const topPadding = Math.max(insets.top, Platform.OS === 'android' ? (StatusBar.currentHeight || 24) : 0) + 10;
+  const bottomPadding = Math.max(insets.bottom, 20);
+
   return (
-    <SafeAreaView style={styles.container}>
+    <View style={styles.container}>
       {/* Header */}
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: topPadding }]}>
         <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
           <Ionicons name="chevron-back" size={24} color="#FFFFFF" />
         </TouchableOpacity>
@@ -102,7 +108,7 @@ export default function SettingsScreen() {
         <View style={{ width: 32 }} />
       </View>
 
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={[styles.scrollContent, { paddingBottom: bottomPadding + 20 }]} showsVerticalScrollIndicator={false}>
         {/* BLE Discovery Toggle */}
         <View style={styles.section}>
           <Text style={styles.sectionHeader}>SOCIAL & DISCOVERY</Text>
@@ -233,7 +239,7 @@ export default function SettingsScreen() {
           <Text style={styles.aboutSub}>Serverless • Privacy-First • Offline</Text>
         </View>
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 }
 
@@ -247,7 +253,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 20,
-    paddingVertical: 16,
+    paddingBottom: 14,
     borderBottomWidth: 1,
     borderBottomColor: '#121214',
   },

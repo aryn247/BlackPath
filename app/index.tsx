@@ -1,23 +1,31 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   TouchableOpacity,
-  SafeAreaView,
   Modal,
   Alert,
+  Platform,
+  StatusBar,
 } from 'react-native';
 import { useRouter } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors } from '../constants/theme';
 import { WalkStore } from '../store/walkStore';
 import { PermissionService } from '../services/permissions/PermissionService';
+import { VersionCheckService } from '../services/notifications/VersionCheckService';
 import { Ionicons } from '@expo/vector-icons';
 
 export default function MainScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const [isStarting, setIsStarting] = useState(false);
   const [showPermissionModal, setShowPermissionModal] = useState(false);
+
+  useEffect(() => {
+    VersionCheckService.checkForUpdates();
+  }, []);
 
   const handleStartWalkPress = async () => {
     setIsStarting(true);
@@ -54,10 +62,13 @@ export default function MainScreen() {
     }
   };
 
+  const topPadding = Math.max(insets.top, Platform.OS === 'android' ? (StatusBar.currentHeight || 24) : 0) + 12;
+  const bottomPadding = Math.max(insets.bottom, 16);
+
   return (
-    <SafeAreaView style={styles.container}>
+    <View style={styles.container}>
       {/* Top Header */}
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: topPadding }]}>
         <Text style={styles.logoTitle}>BLACKPATH</Text>
       </View>
 
@@ -87,7 +98,7 @@ export default function MainScreen() {
       </View>
 
       {/* Bottom Navigation Toolbar */}
-      <View style={styles.navToolbar}>
+      <View style={[styles.navToolbar, { paddingBottom: bottomPadding }]}>
         <TouchableOpacity
           style={styles.navButton}
           onPress={() => router.push('/history')}
@@ -151,7 +162,7 @@ export default function MainScreen() {
           </View>
         </View>
       </Modal>
-    </SafeAreaView>
+    </View>
   );
 }
 
@@ -163,7 +174,7 @@ const styles = StyleSheet.create({
   },
   header: {
     alignItems: 'center',
-    paddingTop: 30,
+    paddingBottom: 10,
   },
   logoTitle: {
     fontSize: 16,
@@ -244,10 +255,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-around',
     alignItems: 'center',
-    paddingVertical: 16,
+    paddingTop: 14,
     borderTopWidth: 1,
     borderTopColor: '#121214',
     paddingHorizontal: 10,
+    backgroundColor: '#000000',
   },
   navButton: {
     alignItems: 'center',
