@@ -2,47 +2,71 @@ import * as Location from 'expo-location';
 import * as TaskManager from 'expo-task-manager';
 import { GPSPoint } from '../../types';
 import { isValidGPSPoint } from '../../geo/smoothing';
+import { getActiveSession, insertBackgroundGPSPoint } from '../database/db';
 
 export const LOCATION_TASK_NAME = 'BLACKPATH_BACKGROUND_LOCATION';
 
 type LocationSubscriber = (point: GPSPoint) => void;
 
-class LocationServiceManager {
-  private subscribers: Set<LocationSubscriber> = new Set();
-  private foregroundSubscription: Location.LocationSubscription | null = null;
-  private isTrackingActive: boolean = false;
-  private lastPoint: GPSPoint | null = null;
+let activeSessionId: string | null = null;
+let lastPoint: GPSPoint | null = null;
+const globalSubscribers: Set<LocationSubscriber> = new Set();
 
-  constructor() {
-    this.registerBackgroundTask();
-  }
+/**
+ * Module-scope TaskManager registration.
+ * Runs in background thread independent of React component mounting or JS event loop state.
+ */
+if (!TaskManager.isTaskDefined(LOCATION_TASK_NAME)) {
+  TaskManager.defineTask(LOCATION_TASK_NAME, async ({ data, error }) => {
+    if (error) {
+      console.error('Background location task error:', error);
+      return;
+    }
 
-  /**
-   * Registers Expo TaskManager background location task.
-   */
-  private registerBackgroundTask() {
-    if (TaskManager.isTaskDefined(LOCATION_TASK_NAME)) return;
+    if (data) {
+      const { locations } = data as { locations: Location.LocationObject[] };
+      if (!locations || locations.length === 0) return;
 
-    TaskManager.defineTask(LOCATION_TASK_NAME, async ({ data, error }) => {
-      if (error) {
-        console.error('Background location task error:', error);
-        return;
-      }
-      if (data) {
-        const { locations } = data as { locations: Location.LocationObject[] };
-        if (locations && locations.length > 0) {
-          for (const loc of locations) {
-            this.handleLocationUpdate(loc);
-          }
+      // Query active session directly from SQLite
+      const activeSession = await getActiveSession();
+      if (!activeSession) return;
+
+      for (const loc of locations) {
+        const point: GPSPoint = {
+          latitude: loc.coords.latitude,
+          longitude: loc.coords.longitude,
+          timestamp: loc.timestamp || Date.now(),
+          accuracy: loc.coords.accuracy || 0,
+          speed: loc.coords.speed,
+          altitude: loc.coords.altitude,
+        };
+
+        if (isValidGPSPoint(point, lastPoint || undefined)) {
+          lastPoint = point;
+
+          // DIRECT SQLITE PERSISTENCE
+          await insertBackgroundGPSPoint(activeSession.id, point);
+
+          // Notify in-memory subscribers if UI is active
+          globalSubscribers.forEach((cb) => cb(point));
         }
       }
-    });
+    }
+  });
+}
+
+class LocationServiceManager {
+  private foregroundSubscription: Location.LocationSubscription | null = null;
+  private isTrackingActive: boolean = false;
+
+  public setActiveSessionId(sessionId: string | null) {
+    activeSessionId = sessionId;
   }
 
   /**
-   * Processes an incoming raw LocationObject from GPS.
+   * Processes raw foreground location updates.
    */
-  public handleLocationUpdate(locationObj: Location.LocationObject) {
+  public async handleLocationUpdate(locationObj: Location.LocationObject) {
     const point: GPSPoint = {
       latitude: locationObj.coords.latitude,
       longitude: locationObj.coords.longitude,
@@ -52,18 +76,24 @@ class LocationServiceManager {
       altitude: locationObj.coords.altitude,
     };
 
-    if (isValidGPSPoint(point, this.lastPoint || undefined)) {
-      this.lastPoint = point;
-      this.subscribers.forEach((callback) => callback(point));
+    if (isValidGPSPoint(point, lastPoint || undefined)) {
+      lastPoint = point;
+
+      const activeSession = await getActiveSession();
+      if (activeSession) {
+        await insertBackgroundGPSPoint(activeSession.id, point);
+      }
+
+      globalSubscribers.forEach((callback) => callback(point));
     }
   }
 
   /**
    * Starts high accuracy foreground and background location tracking.
    */
-  public async startTracking(onPointReceived: LocationSubscriber): Promise<boolean> {
-    this.subscribers.add(onPointReceived);
-    if (this.isTrackingActive) return true;
+  public async startTracking(sessionId: string, onPointReceived: LocationSubscriber): Promise<boolean> {
+    globalSubscribers.add(onPointReceived);
+    activeSessionId = sessionId;
 
     try {
       const fgStatus = await Location.getForegroundPermissionsAsync();
@@ -74,17 +104,19 @@ class LocationServiceManager {
         }
       }
 
-      // Start Foreground Subscription
-      this.foregroundSubscription = await Location.watchPositionAsync(
-        {
-          accuracy: Location.Accuracy.BestForNavigation,
-          timeInterval: 1500, // Every 1.5s
-          distanceInterval: 2, // Every 2 meters
-        },
-        (location) => this.handleLocationUpdate(location)
-      );
+      // Start Foreground Watch Position
+      if (!this.foregroundSubscription) {
+        this.foregroundSubscription = await Location.watchPositionAsync(
+          {
+            accuracy: Location.Accuracy.BestForNavigation,
+            timeInterval: 1500,
+            distanceInterval: 2,
+          },
+          (location) => this.handleLocationUpdate(location)
+        );
+      }
 
-      // Start Background Task if permitted
+      // Start Native Background Task & Foreground Service
       const bgStatus = await Location.getBackgroundPermissionsAsync();
       if (bgStatus.status === Location.PermissionStatus.GRANTED) {
         const hasStarted = await Location.hasStartedLocationUpdatesAsync(LOCATION_TASK_NAME);
@@ -96,7 +128,7 @@ class LocationServiceManager {
             showsBackgroundLocationIndicator: true,
             foregroundService: {
               notificationTitle: 'BlackPath Active Walk',
-              notificationBody: 'Drawing your path on black screen...',
+              notificationBody: 'Tracking your path in background...',
               notificationColor: '#000000',
             },
           });
@@ -116,10 +148,10 @@ class LocationServiceManager {
    */
   public async stopTracking(onPointReceived?: LocationSubscriber) {
     if (onPointReceived) {
-      this.subscribers.delete(onPointReceived);
+      globalSubscribers.delete(onPointReceived);
     }
 
-    if (this.subscribers.size === 0) {
+    if (globalSubscribers.size === 0) {
       if (this.foregroundSubscription) {
         this.foregroundSubscription.remove();
         this.foregroundSubscription = null;
@@ -135,7 +167,8 @@ class LocationServiceManager {
       }
 
       this.isTrackingActive = false;
-      this.lastPoint = null;
+      activeSessionId = null;
+      lastPoint = null;
     }
   }
 }

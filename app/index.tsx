@@ -25,7 +25,12 @@ export default function MainScreen() {
 
   useEffect(() => {
     VersionCheckService.checkForUpdates();
-  }, []);
+    WalkStore.restoreActiveSession().then((hasActiveSession) => {
+      if (hasActiveSession) {
+        router.replace('/walk');
+      }
+    });
+  }, [router]);
 
   const handleStartWalkPress = async () => {
     setIsStarting(true);

@@ -18,6 +18,7 @@ export interface WalkSession {
   averagePace: number; // seconds per kilometer
   pathLength: number; // total points count
   areaClaimed: number; // in square meters (0 if no loop)
+  status?: 'active' | 'completed';
   points?: GPSPoint[];
 }
 

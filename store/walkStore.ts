@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { AppState, AppStateStatus } from 'react-native';
 import { GPSPoint, NearbyUser, WalkSession, WalkStatus } from '../types';
 import { calculatePace, calculateTotalDistance } from '../geo/distance';
 import { smoothPath } from '../geo/smoothing';
@@ -6,12 +7,13 @@ import { detectLoop } from '../geo/loopDetection';
 import { calculateClosedLoopArea } from '../geo/area';
 import { LocationService } from '../services/location/LocationService';
 import { BLEService } from '../services/bluetooth/BLEService';
-import { saveSession, saveSharedWalk } from '../services/database/db';
+import { completeSession, createActiveSession, getActiveSession, saveSharedWalk } from '../services/database/db';
 
 export interface WalkState {
   status: WalkStatus;
+  sessionId: string;
   startedAt: number;
-  duration: number;
+  duration: number; // elapsed seconds
   distance: number; // meters
   averagePace: number; // sec / km
   isLoopClosed: boolean;
@@ -29,6 +31,7 @@ export interface WalkState {
 
 const initialState: WalkState = {
   status: 'idle',
+  sessionId: '',
   startedAt: 0,
   duration: 0,
   distance: 0,
@@ -49,6 +52,7 @@ const listeners: Set<(state: WalkState) => void> = new Set();
 
 let durationTimer: any = null;
 let sharedDurationTimer: any = null;
+let isAppStateSubscribed = false;
 
 function notifyListeners() {
   listeners.forEach((listener) => listener({ ...globalWalkState }));
@@ -56,6 +60,36 @@ function notifyListeners() {
 
 export function getWalkState(): WalkState {
   return globalWalkState;
+}
+
+/**
+ * Recalculates elapsed time, distance, and path from SQLite state.
+ * Independent of JS setInterval or screen lock suspension.
+ */
+function syncActiveStateWithTime() {
+  if (globalWalkState.status !== 'walking' || !globalWalkState.startedAt) return;
+
+  const now = Date.now();
+  const elapsed = Math.max(0, Math.floor((now - globalWalkState.startedAt) / 1000));
+  globalWalkState.duration = elapsed;
+  globalWalkState.averagePace = calculatePace(globalWalkState.distance, elapsed, 'km');
+  notifyListeners();
+}
+
+/**
+ * AppState listener: When returning from background or unlocking phone,
+ * re-fetches points saved by background task to SQLite and updates UI immediately.
+ */
+function setupAppStateListener() {
+  if (isAppStateSubscribed) return;
+  isAppStateSubscribed = true;
+
+  AppState.addEventListener('change', async (nextAppState: AppStateStatus) => {
+    if (nextAppState === 'active' && globalWalkState.status === 'walking') {
+      await WalkStore.syncBackgroundGPSPoints();
+      syncActiveStateWithTime();
+    }
+  });
 }
 
 export const WalkStore = {
@@ -68,18 +102,111 @@ export const WalkStore = {
   },
 
   /**
-   * Starts a new walk session with GPS tracking & BLE discovery.
+   * Checks SQLite for an uncompleted active session on app startup or crash recovery.
+   */
+  restoreActiveSession: async (): Promise<boolean> => {
+    setupAppStateListener();
+
+    try {
+      const activeSession = await getActiveSession();
+      if (!activeSession) return false;
+
+      const points = activeSession.points || [];
+      const smoothed = smoothPath(points, 3);
+      const totalDist = calculateTotalDistance(points);
+      const elapsed = Math.max(0, Math.floor((Date.now() - activeSession.startedAt) / 1000));
+
+      const loopResult = detectLoop(smoothed, 25, 100);
+      const area = loopResult.isLoop ? calculateClosedLoopArea(smoothed) : 0;
+
+      globalWalkState = {
+        ...initialState,
+        status: 'walking',
+        sessionId: activeSession.id,
+        startedAt: activeSession.startedAt,
+        duration: elapsed,
+        distance: totalDist,
+        averagePace: calculatePace(totalDist, elapsed, 'km'),
+        points,
+        smoothedPoints: smoothed,
+        isLoopClosed: loopResult.isLoop,
+        areaClaimed: area,
+      };
+
+      notifyListeners();
+
+      // Reconnect background location tracker
+      await LocationService.startTracking(activeSession.id, (point) => {
+        WalkStore.addPoint(point);
+      });
+
+      // Start timer tick for live UI updates
+      if (durationTimer) clearInterval(durationTimer);
+      durationTimer = setInterval(() => {
+        syncActiveStateWithTime();
+      }, 1000);
+
+      return true;
+    } catch (e) {
+      console.warn('Error restoring active session:', e);
+      return false;
+    }
+  },
+
+  /**
+   * Reloads all GPS points saved to SQLite by background task while app was minimized.
+   */
+  syncBackgroundGPSPoints: async () => {
+    if (globalWalkState.status !== 'walking' || !globalWalkState.sessionId) return;
+
+    try {
+      const activeSession = await getActiveSession();
+      if (activeSession && activeSession.points) {
+        const newPoints = activeSession.points;
+        const newDistance = calculateTotalDistance(newPoints);
+        const newSmoothed = smoothPath(newPoints, 3);
+
+        const loopResult = detectLoop(newSmoothed, 25, 100);
+        const newArea = loopResult.isLoop ? calculateClosedLoopArea(newSmoothed) : globalWalkState.areaClaimed;
+
+        globalWalkState = {
+          ...globalWalkState,
+          points: newPoints,
+          smoothedPoints: newSmoothed,
+          distance: newDistance,
+          isLoopClosed: loopResult.isLoop,
+          areaClaimed: newArea,
+        };
+
+        syncActiveStateWithTime();
+      }
+    } catch (e) {
+      console.warn('Error syncing background GPS points from SQLite:', e);
+    }
+  },
+
+  /**
+   * Starts a new walk session with SQLite persistence & BLE discovery.
    */
   startWalk: async (): Promise<boolean> => {
+    setupAppStateListener();
+
+    const sessionId = `session_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+    const startedAt = Date.now();
+
+    // PERSIST ACTIVE SESSION IMMEDIATELY IN SQLITE
+    await createActiveSession(sessionId, startedAt);
+
     globalWalkState = {
       ...initialState,
       status: 'walking',
-      startedAt: Date.now(),
+      sessionId,
+      startedAt,
     };
     notifyListeners();
 
     // Start Location Service
-    const trackingStarted = await LocationService.startTracking((point) => {
+    const trackingStarted = await LocationService.startTracking(sessionId, (point) => {
       WalkStore.addPoint(point);
     });
 
@@ -92,7 +219,6 @@ export const WalkStore = {
     // Start BLE Service
     BLEService.startBLESession();
 
-    // Listen for nearby BLE peers
     BLEService.onPeerDiscovered((peer) => {
       if (globalWalkState.status === 'walking' && !globalWalkState.activePeer) {
         globalWalkState.incomingInvitePeer = peer;
@@ -100,18 +226,10 @@ export const WalkStore = {
       }
     });
 
-    // Start Duration Timer
+    // Start Duration Timer for live UI
     if (durationTimer) clearInterval(durationTimer);
     durationTimer = setInterval(() => {
-      if (globalWalkState.status === 'walking') {
-        globalWalkState.duration += 1;
-        globalWalkState.averagePace = calculatePace(
-          globalWalkState.distance,
-          globalWalkState.duration,
-          'km'
-        );
-        notifyListeners();
-      }
+      syncActiveStateWithTime();
     }, 1000);
 
     return true;
@@ -127,7 +245,6 @@ export const WalkStore = {
     const newDistance = calculateTotalDistance(newPoints);
     const newSmoothed = smoothPath(newPoints, 3);
 
-    // Check loop closure and enclosed area
     const loopResult = detectLoop(newSmoothed, 25, 100);
     let newArea = globalWalkState.areaClaimed;
     let isClosed = globalWalkState.isLoopClosed;
@@ -144,20 +261,15 @@ export const WalkStore = {
       distance: newDistance,
       isLoopClosed: isClosed,
       areaClaimed: newArea,
-      averagePace: calculatePace(newDistance, globalWalkState.duration, 'km'),
     };
 
-    // If shared walk is active, generate relative peer path point for violet glow
+    syncActiveStateWithTime();
+
     if (globalWalkState.isSharedWalk && globalWalkState.activePeer) {
       WalkStore.updatePeerProximityPoint(point);
     }
-
-    notifyListeners();
   },
 
-  /**
-   * Generates continuous peer visual path offset for dual glowing path rendering.
-   */
   updatePeerProximityPoint: (userPoint: GPSPoint) => {
     const peerOffsetLat = userPoint.latitude + (Math.random() - 0.5) * 0.00015;
     const peerOffsetLon = userPoint.longitude + (Math.random() - 0.5) * 0.00015;
@@ -174,9 +286,6 @@ export const WalkStore = {
     globalWalkState.peerPoints = [...globalWalkState.peerPoints, peerPoint];
   },
 
-  /**
-   * User accepts or initiates a shared walk session.
-   */
   startSharedWalk: (peer: NearbyUser) => {
     globalWalkState.activePeer = peer;
     globalWalkState.incomingInvitePeer = null;
@@ -194,18 +303,12 @@ export const WalkStore = {
     notifyListeners();
   },
 
-  /**
-   * User declines or dismisses nearby peer prompt ("NOT NOW").
-   */
   declineNearbyPeer: (peerId: string) => {
     BLEService.setPeerCooldown(peerId);
     globalWalkState.incomingInvitePeer = null;
     notifyListeners();
   },
 
-  /**
-   * Leaves active shared walk session and returns to solo tracking.
-   */
   leaveSharedWalk: async () => {
     if (!globalWalkState.isSharedWalk) return;
 
@@ -231,7 +334,7 @@ export const WalkStore = {
   },
 
   /**
-   * Stops active walk, saves final data to SQLite, and computes summary statistics.
+   * Stops active walk, saves final completed session in SQLite, and cleans up tracking.
    */
   stopWalk: async (): Promise<WalkSession | null> => {
     if (globalWalkState.status === 'idle') return null;
@@ -248,20 +351,22 @@ export const WalkStore = {
     await LocationService.stopTracking();
     BLEService.stopBLESession();
 
+    // Re-sync final points from SQLite
+    await WalkStore.syncBackgroundGPSPoints();
+
     const finalPoints = globalWalkState.smoothedPoints.length > 0
       ? globalWalkState.smoothedPoints
       : globalWalkState.points;
 
     const finalDistance = calculateTotalDistance(finalPoints);
-    const finalDuration = globalWalkState.duration;
+    const finalDuration = Math.max(0, Math.floor((Date.now() - globalWalkState.startedAt) / 1000));
     const finalPace = calculatePace(finalDistance, finalDuration, 'km');
 
-    // Final Loop Check
     const loopResult = detectLoop(finalPoints, 25, 100);
     const finalArea = loopResult.isLoop ? calculateClosedLoopArea(finalPoints) : globalWalkState.areaClaimed;
 
     const session: WalkSession = {
-      id: `session_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+      id: globalWalkState.sessionId,
       startedAt: globalWalkState.startedAt,
       endedAt: Date.now(),
       distance: finalDistance,
@@ -269,11 +374,12 @@ export const WalkStore = {
       averagePace: finalPace,
       pathLength: finalPoints.length,
       areaClaimed: finalArea,
+      status: 'completed',
       points: finalPoints,
     };
 
-    // Save session to SQLite
-    await saveSession(session, finalPoints);
+    // COMPLETE SESSION IN SQLITE
+    await completeSession(session, finalPoints);
 
     globalWalkState = {
       ...initialState,
@@ -290,9 +396,6 @@ export const WalkStore = {
   },
 };
 
-/**
- * Custom React Hook for connecting components to WalkStore state.
- */
 export function useWalkStore(): WalkState {
   const [state, setState] = useState<WalkState>(WalkStore.getState());
 

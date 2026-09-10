@@ -235,7 +235,7 @@ export default function SettingsScreen() {
 
         {/* About */}
         <View style={styles.aboutContainer}>
-          <Text style={styles.aboutText}>BlackPath V1</Text>
+          <Text style={styles.aboutText}>BlackPath v1.0.2</Text>
           <Text style={styles.aboutSub}>Serverless • Privacy-First • Offline</Text>
         </View>
       </ScrollView>

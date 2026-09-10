@@ -1,7 +1,7 @@
 {
   "name": "walk",
   "main": "expo-router/entry",
-  "version": "1.0.0",
+  "version": "1.0.2",
   "dependencies": {
     "@expo/ui": "~57.0.17",
     "@expo/vector-icons": "^15.0.2",

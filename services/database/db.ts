@@ -1,5 +1,6 @@
 import * as SQLite from 'expo-sqlite';
 import { GPSPoint, NearbyUser, SharedWalk, StatsSummary, UserSettings, WalkSession } from '../../types';
+import { haversineDistance } from '../../geo/distance';
 
 let dbInstance: SQLite.SQLiteDatabase | null = null;
 
@@ -23,7 +24,8 @@ async function initTables(db: SQLite.SQLiteDatabase): Promise<void> {
       duration INTEGER NOT NULL DEFAULT 0,
       averagePace REAL NOT NULL DEFAULT 0,
       pathLength INTEGER NOT NULL DEFAULT 0,
-      areaClaimed REAL NOT NULL DEFAULT 0
+      areaClaimed REAL NOT NULL DEFAULT 0,
+      status TEXT NOT NULL DEFAULT 'active'
     );
 
     CREATE TABLE IF NOT EXISTS gps_points (
@@ -66,37 +68,99 @@ async function initTables(db: SQLite.SQLiteDatabase): Promise<void> {
     INSERT OR IGNORE INTO settings (id, discoverable, notificationsEnabled, units)
     VALUES (1, 1, 1, 'km');
   `);
+
+  // Migration: Add status column if missing from earlier versions
+  try {
+    const tableInfo = await db.getAllAsync<{ name: string }>(`PRAGMA table_info(sessions);`);
+    const hasStatus = tableInfo.some((col) => col.name === 'status');
+    if (!hasStatus) {
+      await db.execAsync(`ALTER TABLE sessions ADD COLUMN status TEXT NOT NULL DEFAULT 'completed';`);
+    }
+  } catch (e) {
+    console.warn('Migration error for sessions status column:', e);
+  }
 }
 
 /* ============================================================================
- * SESSIONS DAO
+ * SESSIONS DAO & ACTIVE SESSION RECOVERY
  * ============================================================================ */
 
-export async function saveSession(session: WalkSession, points: GPSPoint[]): Promise<void> {
+export async function createActiveSession(sessionId: string, startedAt: number): Promise<WalkSession> {
   const db = await getDatabase();
+  const session: WalkSession = {
+    id: sessionId,
+    startedAt,
+    distance: 0,
+    duration: 0,
+    averagePace: 0,
+    pathLength: 0,
+    areaClaimed: 0,
+    status: 'active',
+  };
+
+  await db.runAsync(
+    `INSERT OR REPLACE INTO sessions 
+      (id, startedAt, endedAt, distance, duration, averagePace, pathLength, areaClaimed, status)
+     VALUES (?, ?, NULL, 0, 0, 0, 0, 0, 'active');`,
+    [sessionId, startedAt]
+  );
+
+  return session;
+}
+
+export async function getActiveSession(): Promise<WalkSession | null> {
+  const db = await getDatabase();
+  const session = await db.getFirstAsync<WalkSession>(
+    `SELECT * FROM sessions WHERE status = 'active' ORDER BY startedAt DESC LIMIT 1;`
+  );
+
+  if (!session) return null;
+
+  const points = await db.getAllAsync<GPSPoint>(
+    `SELECT * FROM gps_points WHERE sessionId = ? ORDER BY timestamp ASC;`,
+    [session.id]
+  );
+
+  return {
+    ...session,
+    points,
+  };
+}
+
+export async function completeSession(
+  session: WalkSession,
+  points: GPSPoint[]
+): Promise<void> {
+  const db = await getDatabase();
+  const endedAt = session.endedAt || Date.now();
 
   await db.withTransactionAsync(async () => {
     await db.runAsync(
-      `INSERT OR REPLACE INTO sessions 
-        (id, startedAt, endedAt, distance, duration, averagePace, pathLength, areaClaimed)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?);`,
+      `UPDATE sessions SET 
+        endedAt = ?, 
+        distance = ?, 
+        duration = ?, 
+        averagePace = ?, 
+        pathLength = ?, 
+        areaClaimed = ?, 
+        status = 'completed'
+       WHERE id = ?;`,
       [
-        session.id,
-        session.startedAt,
-        session.endedAt || Date.now(),
+        endedAt,
         session.distance,
         session.duration,
         session.averagePace,
         points.length,
         session.areaClaimed,
+        session.id,
       ]
     );
 
-    // Batch insert GPS points
+    // Save any remaining unpersisted points
     for (const pt of points) {
       const ptId = pt.id || `${session.id}_${pt.timestamp}_${Math.random().toString(36).substring(2, 7)}`;
       await db.runAsync(
-        `INSERT OR REPLACE INTO gps_points 
+        `INSERT OR IGNORE INTO gps_points 
           (id, sessionId, latitude, longitude, timestamp, accuracy, speed, altitude)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?);`,
         [
@@ -114,10 +178,87 @@ export async function saveSession(session: WalkSession, points: GPSPoint[]): Pro
   });
 }
 
+/**
+ * DIRECT BACKGROUND PERSISTENCE:
+ * Inserts a single GPS point directly into SQLite from the native background location task.
+ * Operates independently of React UI or JS execution state.
+ */
+export async function insertBackgroundGPSPoint(
+  sessionId: string,
+  point: GPSPoint
+): Promise<{ added: boolean; newTotalDistance: number }> {
+  try {
+    const db = await getDatabase();
+    
+    // Get last point recorded for this session to calculate incremental distance
+    const lastPoint = await db.getFirstAsync<GPSPoint>(
+      `SELECT latitude, longitude FROM gps_points WHERE sessionId = ? ORDER BY timestamp DESC LIMIT 1;`,
+      [sessionId]
+    );
+
+    let incrementalDist = 0;
+    if (lastPoint) {
+      incrementalDist = haversineDistance(
+        lastPoint.latitude,
+        lastPoint.longitude,
+        point.latitude,
+        point.longitude
+      );
+
+      // Stationarity Filter: Ignore micro-jitter (< 1.5m movement)
+      if (incrementalDist < 1.5) {
+        return { added: false, newTotalDistance: 0 };
+      }
+    }
+
+    const ptId = point.id || `${sessionId}_${point.timestamp}_${Math.random().toString(36).substring(2, 7)}`;
+
+    await db.withTransactionAsync(async () => {
+      await db.runAsync(
+        `INSERT OR IGNORE INTO gps_points 
+          (id, sessionId, latitude, longitude, timestamp, accuracy, speed, altitude)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?);`,
+        [
+          ptId,
+          sessionId,
+          point.latitude,
+          point.longitude,
+          point.timestamp,
+          point.accuracy ?? null,
+          point.speed ?? null,
+          point.altitude ?? null,
+        ]
+      );
+
+      await db.runAsync(
+        `UPDATE sessions SET 
+          distance = distance + ?, 
+          pathLength = pathLength + 1 
+         WHERE id = ?;`,
+        [incrementalDist, sessionId]
+      );
+    });
+
+    const updatedSession = await db.getFirstAsync<{ distance: number }>(
+      `SELECT distance FROM sessions WHERE id = ?;`,
+      [sessionId]
+    );
+
+    return { added: true, newTotalDistance: updatedSession?.distance || 0 };
+  } catch (e) {
+    console.error('Error inserting background GPS point into SQLite:', e);
+    return { added: false, newTotalDistance: 0 };
+  }
+}
+
+export async function saveSession(session: WalkSession, points: GPSPoint[]): Promise<void> {
+  return completeSession(session, points);
+}
+
 export async function getAllSessions(): Promise<WalkSession[]> {
   const db = await getDatabase();
   const rows = await db.getAllAsync<WalkSession>(
-    `SELECT * FROM sessions ORDER BY startedAt DESC;`
+    `SELECT * FROM sessions WHERE status = 'completed' ORDER BY startedAt DESC;`
   );
   return rows;
 }
@@ -167,19 +308,19 @@ export async function deleteAllHistory(): Promise<void> {
 export async function getStatsSummary(period: 'today' | 'week' | 'month' | 'all' = 'all'): Promise<StatsSummary> {
   const db = await getDatabase();
 
-  let timeFilterClause = '';
+  let timeFilterClause = `WHERE status = 'completed'`;
   const now = Date.now();
 
   if (period === 'today') {
     const startOfDay = new Date();
     startOfDay.setHours(0, 0, 0, 0);
-    timeFilterClause = `WHERE startedAt >= ${startOfDay.getTime()}`;
+    timeFilterClause += ` AND startedAt >= ${startOfDay.getTime()}`;
   } else if (period === 'week') {
     const startOfWeek = now - 7 * 24 * 60 * 60 * 1000;
-    timeFilterClause = `WHERE startedAt >= ${startOfWeek}`;
+    timeFilterClause += ` AND startedAt >= ${startOfWeek}`;
   } else if (period === 'month') {
     const startOfMonth = now - 30 * 24 * 60 * 60 * 1000;
-    timeFilterClause = `WHERE startedAt >= ${startOfMonth}`;
+    timeFilterClause += ` AND startedAt >= ${startOfMonth}`;
   }
 
   const sessionStats = await db.getFirstAsync<{
@@ -212,7 +353,6 @@ export async function getStatsSummary(period: 'today' | 'week' | 'month' | 'all'
     FROM shared_walks;
   `);
 
-  // Calculate current daily streak
   const streak = await calculateCurrentStreak(db);
 
   return {
@@ -232,6 +372,7 @@ async function calculateCurrentStreak(db: SQLite.SQLiteDatabase): Promise<number
   const dates = await db.getAllAsync<{ dateStr: string }>(`
     SELECT DISTINCT strftime('%Y-%m-%d', startedAt / 1000, 'unixepoch', 'localtime') as dateStr
     FROM sessions
+    WHERE status = 'completed'
     ORDER BY dateStr DESC;
   `);
 
@@ -245,7 +386,6 @@ async function calculateCurrentStreak(db: SQLite.SQLiteDatabase): Promise<number
   let streak = 0;
   let checkDate = new Date();
 
-  // If top date is today or yesterday, count streak
   const topDate = dates[0].dateStr;
   if (topDate !== todayStr && topDate !== yesterdayStr) {
     return 0;
