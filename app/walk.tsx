@@ -24,6 +24,8 @@ import { formatArea, formatDistance, formatDuration, formatPace } from '../geo/d
 import { BLEService } from '../services/bluetooth/BLEService';
 import { WalkSession } from '../types';
 
+import { BottomNav } from '../components/BottomNav';
+
 export default function WalkScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -35,10 +37,9 @@ export default function WalkScreen() {
   const [isStopping, setIsStopping] = useState(false);
 
   const canvasWidth = Dimensions.get('window').width;
-  const canvasHeight = Dimensions.get('window').height * 0.50;
+  const canvasHeight = Dimensions.get('window').height * 0.48;
 
-  const topPadding = Math.max(insets.top, Platform.OS === 'android' ? (StatusBar.currentHeight || 24) : 0) + 12;
-  const bottomPadding = Math.max(insets.bottom, 24);
+  const topPadding = Math.max(insets.top, Platform.OS === 'android' ? (StatusBar.currentHeight || 24) : 0) + 8;
 
   // Handle Stop Walk Action
   const handleStopWalk = async () => {
@@ -61,13 +62,23 @@ export default function WalkScreen() {
     router.replace('/history');
   };
 
+  const handleDiscardSummary = () => {
+    setShowSummaryModal(false);
+    WalkStore.resetState();
+    router.replace('/');
+  };
+
   return (
     <View style={styles.container}>
-      {/* Top Bar Header */}
-      <View style={[styles.header, { paddingTop: topPadding }]}>
-        <Text style={styles.headerTitle}>
-          {walkState.isSharedWalk ? 'SHARED WALK' : 'BLACKPATH'}
-        </Text>
+      {/* Top 2x2 Metric Grid (Mockup Screens 2 & 3) */}
+      <View style={[styles.topMetricHeader, { paddingTop: topPadding }]}>
+        <WalkStats
+          distanceMeters={walkState.distance}
+          durationSeconds={walkState.duration}
+          paceSeconds={walkState.averagePace}
+          areaClaimedSqMeters={walkState.areaClaimed}
+          units={settings.units}
+        />
         {walkState.isLoopClosed && (
           <View style={styles.loopBadge}>
             <Text style={styles.loopBadgeText}>CLOSED LOOP DETECTED</Text>
@@ -107,32 +118,24 @@ export default function WalkScreen() {
         />
       )}
 
-      {/* Live Stats Display Component */}
-      <View style={styles.statsContainer}>
-        <WalkStats
-          distanceMeters={walkState.distance}
-          durationSeconds={walkState.duration}
-          paceSeconds={walkState.averagePace}
-          areaClaimedSqMeters={walkState.areaClaimed}
-          units={settings.units}
-        />
-      </View>
-
-      {/* Stop Walk Control Button */}
-      <View style={[styles.footerContainer, { paddingBottom: bottomPadding }]}>
+      {/* Compact Circular Red Stop Button (Mockup Screens 2 & 3) */}
+      <View style={styles.footerContainer}>
         <TouchableOpacity
-          style={styles.stopButton}
+          style={styles.circleStopButton}
           activeOpacity={0.8}
           onPress={handleStopWalk}
           disabled={isStopping}
         >
-          <Text style={styles.stopButtonText}>
-            {isStopping ? 'STOPPING...' : 'STOP WALK'}
+          <Text style={styles.circleStopText}>
+            {isStopping ? '...' : 'STOP'}
           </Text>
         </TouchableOpacity>
       </View>
 
-      {/* Walk Complete Summary Modal */}
+      {/* Persistent Bottom Nav Bar */}
+      <BottomNav />
+
+      {/* Walk Complete Summary Modal (Mockup Screen 9) */}
       <Modal
         visible={showSummaryModal}
         transparent={false}
@@ -140,58 +143,8 @@ export default function WalkScreen() {
         onRequestClose={handleSaveSummary}
       >
         <View style={[styles.summaryContainer, { paddingTop: topPadding }]}>
-          <ScrollView contentContainerStyle={[styles.summaryContent, { paddingBottom: bottomPadding + 20 }]}>
+          <ScrollView contentContainerStyle={styles.summaryContent} showsVerticalScrollIndicator={false}>
             <Text style={styles.summaryHeaderTitle}>WALK COMPLETE</Text>
-
-            {/* Primary Distance */}
-            <Text style={styles.summaryDistanceText}>
-              {formatDistance(savedSession?.distance || 0, settings.units)}
-            </Text>
-
-            {/* Metrics Breakdown */}
-            <View style={styles.summaryGrid}>
-              <View style={styles.summaryGridItem}>
-                <Text style={styles.summaryLabel}>DURATION</Text>
-                <Text style={styles.summaryValue}>
-                  {formatDuration(savedSession?.duration || 0)}
-                </Text>
-              </View>
-
-              <View style={styles.summaryGridItem}>
-                <Text style={styles.summaryLabel}>AVERAGE PACE</Text>
-                <Text style={styles.summaryValue}>
-                  {formatPace(savedSession?.averagePace || 0, settings.units)}
-                </Text>
-              </View>
-            </View>
-
-            {/* Area Claimed Badge */}
-            {(savedSession?.areaClaimed || 0) > 0 && (
-              <View style={styles.summaryAreaBadge}>
-                <Text style={styles.summaryAreaValue}>
-                  {formatArea(savedSession?.areaClaimed || 0)}
-                </Text>
-                <Text style={styles.summaryAreaLabel}>AREA CLAIMED</Text>
-              </View>
-            )}
-
-            {/* Shared / Peer Encounters Summary */}
-            <View style={styles.summaryPeerCard}>
-              <View style={styles.peerSummaryRow}>
-                <Text style={styles.peerSummaryLabel}>NEARBY USERS</Text>
-                <Text style={styles.peerSummaryValue}>
-                  {walkState.activePeer ? 1 : 0}
-                </Text>
-              </View>
-              {walkState.sharedWalkDuration > 0 && (
-                <View style={styles.peerSummaryRow}>
-                  <Text style={styles.peerSummaryLabel}>WALKED TOGETHER</Text>
-                  <Text style={styles.peerSummaryValue}>
-                    {formatDuration(walkState.sharedWalkDuration)}
-                  </Text>
-                </View>
-              )}
-            </View>
 
             {/* Miniature Path Preview */}
             {savedSession?.points && savedSession.points.length > 0 && (
@@ -207,13 +160,70 @@ export default function WalkScreen() {
               </View>
             )}
 
-            {/* Save Action Button */}
+            {/* 2x2 Summary Metrics Grid */}
+            <View style={styles.summaryGrid}>
+              <View style={styles.summaryGridItem}>
+                <Text style={styles.summaryValueLarge}>
+                  {formatDistance(savedSession?.distance || 0, settings.units)}
+                </Text>
+                <Text style={styles.summaryLabel}>Distance</Text>
+              </View>
+
+              <View style={styles.summaryGridItem}>
+                <Text style={styles.summaryValueLarge}>
+                  {formatDuration(savedSession?.duration || 0)}
+                </Text>
+                <Text style={styles.summaryLabel}>Duration</Text>
+              </View>
+            </View>
+
+            <View style={[styles.summaryGrid, { marginTop: 12 }]}>
+              <View style={styles.summaryGridItem}>
+                <Text style={styles.summaryValueSmall}>
+                  {formatPace(savedSession?.averagePace || 0, settings.units)}
+                </Text>
+                <Text style={styles.summaryLabel}>Average Pace</Text>
+              </View>
+
+              <View style={styles.summaryGridItem}>
+                <Text style={styles.summaryValueSmall}>
+                  {(savedSession?.areaClaimed || 0) > 0 ? formatArea(savedSession?.areaClaimed || 0) : '--'}
+                </Text>
+                <Text style={styles.summaryLabel}>Area Claimed</Text>
+              </View>
+            </View>
+
+            {/* Social Rows */}
+            <View style={styles.summaryPeerCard}>
+              <View style={styles.peerSummaryRow}>
+                <Text style={styles.peerSummaryLabel}>Nearby Users Encountered</Text>
+                <Text style={styles.peerSummaryValue}>{walkState.activePeer ? 1 : 0}</Text>
+              </View>
+              {walkState.sharedWalkDuration > 0 && (
+                <View style={[styles.peerSummaryRow, { marginTop: 8 }]}>
+                  <Text style={styles.peerSummaryLabel}>Walked Together</Text>
+                  <Text style={styles.peerSummaryValue}>
+                    {formatDuration(walkState.sharedWalkDuration)}
+                  </Text>
+                </View>
+              )}
+            </View>
+
+            {/* Action Buttons: SAVE & DISCARD */}
             <TouchableOpacity
               style={styles.summarySaveButton}
               activeOpacity={0.8}
               onPress={handleSaveSummary}
             >
               <Text style={styles.summarySaveText}>SAVE</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.summaryDiscardButton}
+              activeOpacity={0.8}
+              onPress={handleDiscardSummary}
+            >
+              <Text style={styles.summaryDiscardText}>DISCARD</Text>
             </TouchableOpacity>
           </ScrollView>
         </View>
@@ -228,23 +238,16 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.background,
     justifyContent: 'space-between',
   },
-  header: {
+  topMetricHeader: {
     alignItems: 'center',
-    paddingTop: 16,
-    paddingHorizontal: 20,
-  },
-  headerTitle: {
-    fontSize: 14,
-    fontWeight: '800',
-    color: '#FFFFFF',
-    letterSpacing: 4,
+    width: '100%',
   },
   loopBadge: {
-    marginTop: 6,
-    paddingVertical: 4,
-    paddingHorizontal: 12,
+    marginTop: 4,
+    paddingVertical: 3,
+    paddingHorizontal: 10,
     backgroundColor: 'rgba(48, 209, 88, 0.15)',
-    borderRadius: 10,
+    borderRadius: 8,
     borderWidth: 1,
     borderColor: '#30D158',
   },
@@ -259,29 +262,29 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  statsContainer: {
-    marginBottom: 12,
-  },
   footerContainer: {
-    paddingHorizontal: 24,
-    marginBottom: 20,
-  },
-  stopButton: {
-    backgroundColor: '#FF453A',
-    borderRadius: 24,
-    paddingVertical: 18,
     alignItems: 'center',
-    shadowColor: '#FF453A',
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.5,
-    shadowRadius: 12,
-    elevation: 6,
+    justifyContent: 'center',
+    marginBottom: 16,
   },
-  stopButtonText: {
-    fontSize: 14,
+  circleStopButton: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: '#FF3B30',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#FF3B30',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.6,
+    shadowRadius: 10,
+    elevation: 8,
+  },
+  circleStopText: {
+    fontSize: 10,
     fontWeight: '800',
     color: '#FFFFFF',
-    letterSpacing: 3,
+    letterSpacing: 1.5,
   },
 
   // Summary Modal Styles
@@ -292,25 +295,15 @@ const styles = StyleSheet.create({
   summaryContent: {
     alignItems: 'center',
     paddingHorizontal: 24,
-    paddingTop: 40,
+    paddingTop: 24,
     paddingBottom: 40,
   },
   summaryHeaderTitle: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '800',
-    color: '#8E8E93',
-    letterSpacing: 4,
-    marginBottom: 16,
-  },
-  summaryDistanceText: {
-    fontSize: 52,
-    fontWeight: '300',
     color: '#FFFFFF',
-    letterSpacing: 1,
-    marginBottom: 24,
-    textShadowColor: 'rgba(255, 255, 255, 0.4)',
-    textShadowOffset: { width: 0, height: 0 },
-    textShadowRadius: 12,
+    letterSpacing: 4,
+    marginBottom: 20,
   },
   summaryGrid: {
     flexDirection: 'row',
@@ -319,9 +312,8 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     borderWidth: 1,
     borderColor: '#1C1C1E',
-    paddingVertical: 18,
+    paddingVertical: 16,
     paddingHorizontal: 16,
-    marginBottom: 16,
   },
   summaryGridItem: {
     flex: 1,
@@ -332,59 +324,39 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#8E8E93',
     letterSpacing: 1.5,
-    marginBottom: 4,
-  },
-  summaryValue: {
-    fontSize: 20,
-    fontWeight: '500',
-    color: '#E5E5EA',
-  },
-  summaryAreaBadge: {
-    width: '100%',
-    backgroundColor: 'rgba(255, 255, 255, 0.08)',
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.2)',
-    paddingVertical: 16,
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  summaryAreaValue: {
-    fontSize: 24,
-    fontWeight: '800',
-    color: '#FFFFFF',
-    letterSpacing: 1,
-  },
-  summaryAreaLabel: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: '#8E8E93',
-    letterSpacing: 2,
     marginTop: 4,
+  },
+  summaryValueLarge: {
+    fontSize: 26,
+    fontWeight: '300',
+    color: '#FFFFFF',
+  },
+  summaryValueSmall: {
+    fontSize: 18,
+    fontWeight: '400',
+    color: '#E5E5EA',
   },
   summaryPeerCard: {
     width: '100%',
     backgroundColor: '#0F0E14',
     borderWidth: 1,
-    borderColor: Colors.peerPath,
+    borderColor: '#1C1C1E',
     borderRadius: 16,
     padding: 16,
-    marginBottom: 20,
+    marginVertical: 16,
   },
   peerSummaryRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    paddingVertical: 4,
   },
   peerSummaryLabel: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: Colors.peerPath,
-    letterSpacing: 1,
+    fontSize: 12,
+    fontWeight: '500',
+    color: '#8E8E93',
   },
   peerSummaryValue: {
     fontSize: 12,
-    fontWeight: '600',
+    fontWeight: '700',
     color: '#FFFFFF',
   },
   summaryPathPreview: {
@@ -395,19 +367,33 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#1C1C1E',
     overflow: 'hidden',
-    marginBottom: 28,
+    marginBottom: 20,
   },
   summarySaveButton: {
     width: '100%',
     backgroundColor: '#FFFFFF',
     borderRadius: 24,
-    paddingVertical: 18,
+    paddingVertical: 16,
     alignItems: 'center',
+    marginBottom: 10,
   },
   summarySaveText: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '800',
     color: '#000000',
+    letterSpacing: 3,
+  },
+  summaryDiscardButton: {
+    width: '100%',
+    backgroundColor: '#1C1C1E',
+    borderRadius: 24,
+    paddingVertical: 16,
+    alignItems: 'center',
+  },
+  summaryDiscardText: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#FF3B30',
     letterSpacing: 3,
   },
 });

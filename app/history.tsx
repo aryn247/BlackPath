@@ -18,11 +18,15 @@ import { formatArea, formatDistance, formatDuration, formatPace } from '../geo/d
 import { useSettingsStore } from '../store/settingsStore';
 import { Ionicons } from '@expo/vector-icons';
 
+import { PathRenderer } from '../components/PathRenderer';
+import { BottomNav } from '../components/BottomNav';
+
 export default function HistoryScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const settings = useSettingsStore();
   const [sessions, setSessions] = useState<WalkSession[]>([]);
+  const [activeFilter, setActiveFilter] = useState<'All' | 'Week' | 'Month' | 'Year'>('All');
 
   useEffect(() => {
     loadHistory();
@@ -51,32 +55,22 @@ export default function HistoryScreen() {
     ]);
   };
 
-  const handleDeleteAll = () => {
-    Alert.alert(
-      'DELETE ALL HISTORY',
-      'This will permanently delete all saved walks from this device.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete All',
-          style: 'destructive',
-          onPress: async () => {
-            await deleteAllHistory();
-            loadHistory();
-          },
-        },
-      ]
-    );
-  };
-
   const topPadding = Math.max(insets.top, Platform.OS === 'android' ? (StatusBar.currentHeight || 24) : 0) + 10;
-  const bottomPadding = Math.max(insets.bottom, 20);
+
+  const filteredSessions = sessions.filter((s) => {
+    if (activeFilter === 'All') return true;
+    const now = Date.now();
+    const diff = now - s.startedAt;
+    if (activeFilter === 'Week') return diff <= 7 * 86400 * 1000;
+    if (activeFilter === 'Month') return diff <= 30 * 86400 * 1000;
+    if (activeFilter === 'Year') return diff <= 365 * 86400 * 1000;
+    return true;
+  });
 
   const renderSessionItem = ({ item }: { item: WalkSession }) => {
     const formattedDate = new Date(item.startedAt).toLocaleDateString(undefined, {
       month: 'short',
       day: 'numeric',
-      year: 'numeric',
       hour: '2-digit',
       minute: '2-digit',
     });
@@ -87,81 +81,94 @@ export default function HistoryScreen() {
         activeOpacity={0.8}
         onPress={() => router.push(`/session/${item.id}`)}
       >
-        <View style={styles.cardHeader}>
-          <Text style={styles.cardDate}>{formattedDate}</Text>
-          <TouchableOpacity
-            style={styles.deleteIconButton}
-            onPress={() => handleDeleteSession(item.id)}
-            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-          >
-            <Ionicons name="trash-outline" size={18} color="#8E8E93" />
-          </TouchableOpacity>
+        {/* Left Side: Miniature Path Thumbnail */}
+        <View style={styles.thumbnailContainer}>
+          {item.points && item.points.length > 0 ? (
+            <PathRenderer
+              userPoints={item.points}
+              width={64}
+              height={64}
+              showGlow={false}
+              showEndpoint={false}
+              padding={6}
+            />
+          ) : (
+            <View style={styles.thumbnailPlaceholder} />
+          )}
         </View>
 
-        <View style={styles.metricsRow}>
-          <View style={styles.metricItem}>
-            <Text style={styles.metricValue}>
+        {/* Right Side: Details */}
+        <View style={styles.cardDetails}>
+          <View style={styles.cardHeaderRow}>
+            <Text style={styles.cardDate}>{formattedDate}</Text>
+            <TouchableOpacity
+              onPress={() => handleDeleteSession(item.id)}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            >
+              <Ionicons name="chevron-forward" size={16} color="#48484A" />
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.metricsInlineRow}>
+            <Text style={styles.primaryMetricText}>
               {formatDistance(item.distance, settings.units)}
             </Text>
-            <Text style={styles.metricLabel}>DISTANCE</Text>
+            {item.areaClaimed > 0 && (
+              <Text style={styles.areaMetricText}>
+                {formatArea(item.areaClaimed)}
+              </Text>
+            )}
           </View>
 
-          <View style={styles.metricItem}>
-            <Text style={styles.metricValue}>{formatDuration(item.duration)}</Text>
-            <Text style={styles.metricLabel}>DURATION</Text>
-          </View>
-
-          <View style={styles.metricItem}>
-            <Text style={styles.metricValue}>
-              {formatPace(item.averagePace, settings.units)}
-            </Text>
-            <Text style={styles.metricLabel}>PACE</Text>
+          <View style={styles.secondaryInlineRow}>
+            <Text style={styles.durationText}>{formatDuration(item.duration)}</Text>
+            <Text style={styles.paceText}>{formatPace(item.averagePace, settings.units)}</Text>
           </View>
         </View>
-
-        {item.areaClaimed > 0 && (
-          <View style={styles.areaBadge}>
-            <Text style={styles.areaText}>{formatArea(item.areaClaimed)} CLAIMED</Text>
-          </View>
-        )}
       </TouchableOpacity>
     );
   };
 
   return (
     <View style={styles.container}>
-      {/* Top Header */}
+      {/* Header */}
       <View style={[styles.header, { paddingTop: topPadding }]}>
-        <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
-          <Ionicons name="chevron-back" size={24} color="#FFFFFF" />
-        </TouchableOpacity>
+        <Text style={styles.headerTitle}>History</Text>
+      </View>
 
-        <Text style={styles.headerTitle}>HISTORY</Text>
-
-        {sessions.length > 0 ? (
-          <TouchableOpacity onPress={handleDeleteAll}>
-            <Text style={styles.clearAllText}>CLEAR</Text>
+      {/* Time Filter Pills (Mockup Screen 10) */}
+      <View style={styles.filterPillsRow}>
+        {(['All', 'Week', 'Month', 'Year'] as const).map((filter) => (
+          <TouchableOpacity
+            key={filter}
+            style={[styles.filterPill, activeFilter === filter && styles.filterPillActive]}
+            onPress={() => setActiveFilter(filter)}
+          >
+            <Text style={[styles.filterPillText, activeFilter === filter && styles.filterPillTextActive]}>
+              {filter}
+            </Text>
           </TouchableOpacity>
-        ) : (
-          <View style={{ width: 40 }} />
-        )}
+        ))}
       </View>
 
       {/* History List */}
-      {sessions.length === 0 ? (
+      {filteredSessions.length === 0 ? (
         <View style={styles.emptyContainer}>
           <Text style={styles.emptyTitle}>NO SAVED WALKS</Text>
           <Text style={styles.emptySubtitle}>Your completed walks will appear here.</Text>
         </View>
       ) : (
         <FlatList
-          data={sessions}
+          data={filteredSessions}
           keyExtractor={(item) => item.id}
           renderItem={renderSessionItem}
-          contentContainerStyle={[styles.listContent, { paddingBottom: bottomPadding + 20 }]}
+          contentContainerStyle={styles.listContent}
           showsVerticalScrollIndicator={false}
         />
       )}
+
+      {/* Persistent Bottom Nav Bar */}
+      <BottomNav />
     </View>
   );
 }
@@ -172,89 +179,113 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.background,
   },
   header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
     paddingHorizontal: 20,
-    paddingBottom: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: '#121214',
-  },
-  backButton: {
-    padding: 4,
+    paddingBottom: 10,
   },
   headerTitle: {
-    fontSize: 14,
-    fontWeight: '800',
-    color: '#FFFFFF',
-    letterSpacing: 4,
-  },
-  clearAllText: {
-    fontSize: 11,
+    fontSize: 24,
     fontWeight: '700',
-    color: '#FF453A',
-    letterSpacing: 1,
+    color: '#FFFFFF',
+  },
+  filterPillsRow: {
+    flexDirection: 'row',
+    paddingHorizontal: 20,
+    marginBottom: 16,
+  },
+  filterPill: {
+    paddingVertical: 6,
+    paddingHorizontal: 16,
+    borderRadius: 16,
+    backgroundColor: '#1C1C1E',
+    marginRight: 8,
+  },
+  filterPillActive: {
+    backgroundColor: '#FFFFFF',
+  },
+  filterPillText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#8E8E93',
+  },
+  filterPillTextActive: {
+    color: '#000000',
+    fontWeight: '700',
   },
   listContent: {
-    padding: 20,
+    paddingHorizontal: 20,
+    paddingBottom: 20,
   },
   card: {
-    backgroundColor: '#0A0A0A',
+    flexDirection: 'row',
+    backgroundColor: '#0D0D0E',
     borderWidth: 1,
     borderColor: '#1C1C1E',
     borderRadius: 20,
-    padding: 18,
-    marginBottom: 16,
+    padding: 14,
+    marginBottom: 12,
+    alignItems: 'center',
   },
-  cardHeader: {
+  thumbnailContainer: {
+    width: 64,
+    height: 64,
+    borderRadius: 14,
+    backgroundColor: '#000000',
+    borderWidth: 1,
+    borderColor: '#1C1C1E',
+    overflow: 'hidden',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  thumbnailPlaceholder: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#00F0FF',
+  },
+  cardDetails: {
+    flex: 1,
+    marginLeft: 14,
+  },
+  cardHeaderRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 14,
   },
   cardDate: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#8E8E93',
+  },
+  metricsInlineRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    marginTop: 4,
+  },
+  primaryMetricText: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    marginRight: 10,
+  },
+  areaMetricText: {
     fontSize: 12,
     fontWeight: '600',
     color: '#8E8E93',
   },
-  deleteIconButton: {
-    padding: 4,
-  },
-  metricsRow: {
+  secondaryInlineRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 8,
+    marginTop: 4,
   },
-  metricItem: {
-    flex: 1,
-  },
-  metricValue: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#FFFFFF',
-  },
-  metricLabel: {
-    fontSize: 9,
-    fontWeight: '700',
+  durationText: {
+    fontSize: 11,
+    fontWeight: '500',
     color: '#8E8E93',
-    letterSpacing: 1.5,
-    marginTop: 2,
+    marginRight: 12,
   },
-  areaBadge: {
-    marginTop: 12,
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    backgroundColor: 'rgba(255, 255, 255, 0.06)',
-    borderRadius: 10,
-    alignSelf: 'flex-start',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.15)',
-  },
-  areaText: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: '#FFFFFF',
-    letterSpacing: 1,
+  paceText: {
+    fontSize: 11,
+    fontWeight: '500',
+    color: '#8E8E93',
   },
   emptyContainer: {
     flex: 1,
@@ -263,14 +294,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: 32,
   },
   emptyTitle: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '800',
     color: '#FFFFFF',
-    letterSpacing: 3,
+    letterSpacing: 2,
     marginBottom: 8,
   },
   emptySubtitle: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '400',
     color: '#8E8E93',
     textAlign: 'center',

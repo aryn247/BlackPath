@@ -3,6 +3,7 @@ import { View, StyleSheet, Dimensions } from 'react-native';
 import Svg, { Path, Circle, Defs, Filter, FeGaussianBlur, FeMerge, FeMergeNode, G } from 'react-native-svg';
 import { GPSPoint } from '../types';
 import { Colors } from '../constants/theme';
+import { downsamplePath, pointsToBezierPath } from '../geo/smoothing';
 
 interface PathRendererProps {
   userPoints: GPSPoint[];
@@ -25,11 +26,14 @@ export const PathRenderer: React.FC<PathRendererProps> = ({
 }) => {
   // Normalize GPS coordinates to Canvas pixel coordinates (x, y)
   const { userPathData, userEndpoint, peerPathData, peerEndpoint } = useMemo(() => {
-    const allPoints = [...userPoints, ...peerPoints];
-
     if (!userPoints || userPoints.length === 0) {
       return { userPathData: '', userEndpoint: null, peerPathData: '', peerEndpoint: null };
     }
+
+    // Downsample points to max 250 for 60FPS fluid rendering
+    const sampledUser = downsamplePath(userPoints, 250);
+    const sampledPeer = downsamplePath(peerPoints || [], 150);
+    const allPoints = [...sampledUser, ...sampledPeer];
 
     if (allPoints.length === 1) {
       const cx = width / 2;
@@ -76,24 +80,17 @@ export const PathRenderer: React.FC<PathRendererProps> = ({
       return { x, y };
     };
 
-    // Build User SVG Path
-    const userMapped = userPoints.map(mapPoint);
-    let uPath = `M ${userMapped[0].x.toFixed(1)} ${userMapped[0].y.toFixed(1)}`;
-    for (let i = 1; i < userMapped.length; i++) {
-      uPath += ` L ${userMapped[i].x.toFixed(1)} ${userMapped[i].y.toFixed(1)}`;
-    }
-
+    // Build User SVG Smooth Bezier Path
+    const userMapped = sampledUser.map(mapPoint);
+    const uPath = pointsToBezierPath(userMapped);
     const uEnd = userMapped[userMapped.length - 1];
 
     // Build Peer SVG Path if available
     let pPath = '';
     let pEnd = null;
-    if (peerPoints && peerPoints.length > 0) {
-      const peerMapped = peerPoints.map(mapPoint);
-      pPath = `M ${peerMapped[0].x.toFixed(1)} ${peerMapped[0].y.toFixed(1)}`;
-      for (let i = 1; i < peerMapped.length; i++) {
-        pPath += ` L ${peerMapped[i].x.toFixed(1)} ${peerMapped[i].y.toFixed(1)}`;
-      }
+    if (sampledPeer && sampledPeer.length > 0) {
+      const peerMapped = sampledPeer.map(mapPoint);
+      pPath = pointsToBezierPath(peerMapped);
       pEnd = peerMapped[peerMapped.length - 1];
     }
 

@@ -20,6 +20,8 @@ import { PermissionService, PermissionState } from '../services/permissions/Perm
 import { deleteAllHistory } from '../services/database/db';
 import { Ionicons } from '@expo/vector-icons';
 
+import { BottomNav } from '../components/BottomNav';
+
 export default function SettingsScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -108,20 +110,15 @@ export default function SettingsScreen() {
   };
 
   const topPadding = Math.max(insets.top, Platform.OS === 'android' ? (StatusBar.currentHeight || 24) : 0) + 10;
-  const bottomPadding = Math.max(insets.bottom, 20);
 
   return (
     <View style={styles.container}>
-      {/* Header */}
+      {/* Header (Mockup Screen 12) */}
       <View style={[styles.header, { paddingTop: topPadding }]}>
-        <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
-          <Ionicons name="chevron-back" size={24} color="#FFFFFF" />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>SETTINGS</Text>
-        <View style={{ width: 32 }} />
+        <Text style={styles.headerTitle}>Settings</Text>
       </View>
 
-      <ScrollView contentContainerStyle={[styles.scrollContent, { paddingBottom: bottomPadding + 20 }]} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         {/* SHARE APP VIA QR CODE */}
         <View style={styles.section}>
           <Text style={styles.sectionHeader}>SHARE BLACKPATH</Text>
@@ -277,6 +274,9 @@ export default function SettingsScreen() {
           <Text style={styles.aboutSub}>Serverless • Privacy-First • Offline</Text>
         </View>
       </ScrollView>
+
+      {/* Persistent Bottom Nav Bar */}
+      <BottomNav />
     </View>
   );
 }
@@ -287,22 +287,13 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.background,
   },
   header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
     paddingHorizontal: 20,
-    paddingBottom: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: '#121214',
-  },
-  backButton: {
-    padding: 4,
+    paddingBottom: 10,
   },
   headerTitle: {
-    fontSize: 14,
-    fontWeight: '800',
+    fontSize: 24,
+    fontWeight: '700',
     color: '#FFFFFF',
-    letterSpacing: 4,
   },
   scrollContent: {
     padding: 20,

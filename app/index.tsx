@@ -17,6 +17,8 @@ import { PermissionService } from '../services/permissions/PermissionService';
 import { VersionCheckService } from '../services/notifications/VersionCheckService';
 import { Ionicons } from '@expo/vector-icons';
 
+import { BottomNav } from '../components/BottomNav';
+
 export default function MainScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -68,66 +70,32 @@ export default function MainScreen() {
   };
 
   const topPadding = Math.max(insets.top, Platform.OS === 'android' ? (StatusBar.currentHeight || 24) : 0) + 12;
-  const bottomPadding = Math.max(insets.bottom, 16);
 
   return (
     <View style={styles.container}>
       {/* Top Header */}
       <View style={[styles.header, { paddingTop: topPadding }]}>
-        <Text style={styles.logoTitle}>BLACKPATH</Text>
+        <Text style={styles.logoTitle}>B L A C K P A T H</Text>
       </View>
 
-      {/* Center Abstract Pulse Symbol */}
+      {/* Center Large Circular Glowing Start Button (Mockup Screen 1) */}
       <View style={styles.centerContent}>
-        <View style={styles.outerGlowRing}>
-          <View style={styles.innerGlowRing}>
-            <View style={styles.centerPulseCircle} />
-          </View>
-        </View>
-
-        <Text style={styles.tagline}>Walk. Draw. Discover. Connect.</Text>
-      </View>
-
-      {/* Start Walk Action Button */}
-      <View style={styles.actionContainer}>
         <TouchableOpacity
-          style={styles.startWalkButton}
+          style={styles.circleStartButton}
           activeOpacity={0.8}
           onPress={handleStartWalkPress}
           disabled={isStarting}
         >
-          <Text style={styles.startWalkText}>
-            {isStarting ? 'INITIALIZING...' : 'START WALK'}
-          </Text>
+          <View style={styles.circleStartInner}>
+            <Text style={styles.circleStartText}>
+              {isStarting ? 'STARTING...' : 'START WALK'}
+            </Text>
+          </View>
         </TouchableOpacity>
       </View>
 
-      {/* Bottom Navigation Toolbar */}
-      <View style={[styles.navToolbar, { paddingBottom: bottomPadding }]}>
-        <TouchableOpacity
-          style={styles.navButton}
-          onPress={() => router.push('/history')}
-        >
-          <Ionicons name="time-outline" size={22} color="#8E8E93" />
-          <Text style={styles.navLabel}>HISTORY</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.navButton}
-          onPress={() => router.push('/statistics')}
-        >
-          <Ionicons name="stats-chart-outline" size={22} color="#8E8E93" />
-          <Text style={styles.navLabel}>STATS</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.navButton}
-          onPress={() => router.push('/settings')}
-        >
-          <Ionicons name="settings-outline" size={22} color="#8E8E93" />
-          <Text style={styles.navLabel}>SETTINGS</Text>
-        </TouchableOpacity>
-      </View>
+      {/* Persistent Bottom Navigation Bar */}
+      <BottomNav />
 
       {/* Permission Explanation Modal */}
       <Modal
@@ -195,80 +163,35 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     flex: 1,
   },
-  outerGlowRing: {
-    width: 140,
-    height: 140,
-    borderRadius: 70,
-    backgroundColor: 'rgba(255, 255, 255, 0.03)',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
+  circleStartButton: {
+    width: 200,
+    height: 200,
+    borderRadius: 100,
+    borderWidth: 2,
+    borderColor: '#00F0FF',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 30,
-  },
-  innerGlowRing: {
-    width: 90,
-    height: 90,
-    borderRadius: 45,
-    backgroundColor: 'rgba(255, 255, 255, 0.06)',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.25)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  centerPulseCircle: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: '#FFFFFF',
-    shadowColor: '#FFFFFF',
+    shadowColor: '#00F0FF',
     shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 1,
+    shadowOpacity: 0.6,
     shadowRadius: 20,
-    elevation: 10,
+    elevation: 12,
   },
-  tagline: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: '#48484A',
-    letterSpacing: 3,
-    textTransform: 'uppercase',
-  },
-  actionContainer: {
-    paddingHorizontal: 24,
-    marginBottom: 20,
-  },
-  startWalkButton: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 28,
-    paddingVertical: 20,
+  circleStartInner: {
+    width: 176,
+    height: 176,
+    borderRadius: 88,
+    backgroundColor: 'rgba(0, 240, 255, 0.05)',
+    borderWidth: 1,
+    borderColor: 'rgba(0, 240, 255, 0.3)',
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#FFFFFF',
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.5,
-    shadowRadius: 16,
-    elevation: 8,
   },
-  startWalkText: {
-    fontSize: 14,
+  circleStartText: {
+    fontSize: 13,
     fontWeight: '800',
-    color: '#000000',
-    letterSpacing: 3,
-  },
-  navToolbar: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    alignItems: 'center',
-    paddingTop: 14,
-    borderTopWidth: 1,
-    borderTopColor: '#121214',
-    paddingHorizontal: 10,
-    backgroundColor: '#000000',
-  },
-  navButton: {
-    alignItems: 'center',
-    flex: 1,
+    color: '#FFFFFF',
+    letterSpacing: 2,
   },
   navLabel: {
     fontSize: 9,

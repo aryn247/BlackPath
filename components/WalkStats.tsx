@@ -19,120 +19,76 @@ export const WalkStats: React.FC<WalkStatsProps> = ({
   paceSeconds,
   areaClaimedSqMeters = 0,
   units = 'km',
-  compact = false,
 }) => {
   return (
-    <View style={[styles.container, compact && styles.containerCompact]}>
-      {/* Primary Distance Display */}
-      <View style={styles.primaryMetricRow}>
-        <Text style={styles.distanceText}>{formatDistance(distanceMeters, units)}</Text>
-      </View>
-
-      {/* Secondary Metrics Row */}
-      <View style={styles.secondaryMetricsRow}>
-        <View style={styles.statBox}>
-          <Text style={styles.statLabel}>DURATION</Text>
-          <Text style={styles.statValue}>{formatDuration(durationSeconds)}</Text>
+    <View style={styles.topGridContainer}>
+      <View style={styles.gridRow}>
+        {/* Top Left: Duration */}
+        <View style={styles.metricCellLeft}>
+          <Text style={styles.metricValueLarge}>{formatDuration(durationSeconds)}</Text>
+          <Text style={styles.metricLabel}>DURATION</Text>
         </View>
 
-        <View style={styles.divider} />
-
-        <View style={styles.statBox}>
-          <Text style={styles.statLabel}>PACE</Text>
-          <Text style={styles.statValue}>{formatPace(paceSeconds, units)}</Text>
+        {/* Top Right: Distance */}
+        <View style={styles.metricCellRight}>
+          <Text style={styles.metricValueLarge}>{formatDistance(distanceMeters, units)}</Text>
+          <Text style={styles.metricLabel}>DISTANCE</Text>
         </View>
       </View>
 
-      {/* Loop Area Claimed Badge (if loop is closed & area detected) */}
-      {areaClaimedSqMeters > 0 && (
-        <View style={styles.areaBadge}>
-          <Text style={styles.areaBadgeValue}>{formatArea(areaClaimedSqMeters)}</Text>
-          <Text style={styles.areaBadgeLabel}>AREA CLAIMED</Text>
+      <View style={[styles.gridRow, { marginTop: 12 }]}>
+        {/* Bottom Left: Pace */}
+        <View style={styles.metricCellLeft}>
+          <Text style={styles.metricValueSmall}>{formatPace(paceSeconds, units)}</Text>
+          <Text style={styles.metricLabel}>PACE</Text>
         </View>
-      )}
+
+        {/* Bottom Right: Area */}
+        <View style={styles.metricCellRight}>
+          <Text style={styles.metricValueSmall}>
+            {areaClaimedSqMeters > 0 ? formatArea(areaClaimedSqMeters) : '--'}
+          </Text>
+          <Text style={styles.metricLabel}>AREA</Text>
+        </View>
+      </View>
     </View>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {
-    alignItems: 'center',
-    paddingVertical: 16,
-    paddingHorizontal: 20,
-    backgroundColor: '#0A0A0A',
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: '#1C1C1E',
-    marginHorizontal: 20,
-  },
-  containerCompact: {
+  topGridContainer: {
+    paddingHorizontal: 24,
     paddingVertical: 10,
-    marginHorizontal: 0,
-  },
-  primaryMetricRow: {
-    marginBottom: 8,
-  },
-  distanceText: {
-    fontSize: 44,
-    fontWeight: '300',
-    color: '#FFFFFF',
-    letterSpacing: 1,
-    textShadowColor: 'rgba(255, 255, 255, 0.4)',
-    textShadowOffset: { width: 0, height: 0 },
-    textShadowRadius: 10,
-  },
-  secondaryMetricsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
     width: '100%',
-    paddingTop: 4,
   },
-  statBox: {
-    alignItems: 'center',
-    flex: 1,
+  gridRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
   },
-  divider: {
-    width: 1,
-    height: 24,
-    backgroundColor: '#2C2C2E',
+  metricCellLeft: {
+    alignItems: 'flex-start',
   },
-  statLabel: {
-    fontSize: 10,
-    fontWeight: '600',
-    color: '#8E8E93',
-    letterSpacing: 1.5,
-    marginBottom: 2,
+  metricCellRight: {
+    alignItems: 'flex-end',
   },
-  statValue: {
-    fontSize: 18,
-    fontWeight: '500',
-    color: '#E5E5EA',
-  },
-  areaBadge: {
-    marginTop: 14,
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    backgroundColor: 'rgba(255, 255, 255, 0.08)',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.2)',
-    alignItems: 'center',
-  },
-  areaBadgeValue: {
-    fontSize: 18,
-    fontWeight: '700',
+  metricValueLarge: {
+    fontSize: 22,
+    fontWeight: '400',
     color: '#FFFFFF',
     letterSpacing: 0.5,
-    textShadowColor: 'rgba(255, 255, 255, 0.5)',
-    textShadowOffset: { width: 0, height: 0 },
-    textShadowRadius: 8,
   },
-  areaBadgeLabel: {
+  metricValueSmall: {
+    fontSize: 18,
+    fontWeight: '400',
+    color: '#E5E5EA',
+    letterSpacing: 0.5,
+  },
+  metricLabel: {
     fontSize: 9,
     fontWeight: '700',
     color: '#8E8E93',
-    letterSpacing: 2,
+    letterSpacing: 1.5,
     marginTop: 2,
   },
 });
