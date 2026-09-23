@@ -49,32 +49,34 @@ export function isValidGPSPoint(
 
 /**
  * Applies a moving average window to smooth lat/lon coordinates for fluid rendering.
+ * Capped to max 300 points for constant-time performance on long walks.
  */
 export function smoothPath(points: GPSPoint[], windowSize: number = 3): GPSPoint[] {
   if (!points || points.length <= windowSize) return points;
 
+  // Cap points to max 300 for constant time processing on long walks
+  const targetPoints = points.length > 300 ? downsamplePath(points, 300) : points;
   const smoothed: GPSPoint[] = [];
+  const halfWindow = Math.floor(windowSize / 2);
 
-  for (let i = 0; i < points.length; i++) {
-    if (i < Math.floor(windowSize / 2) || i >= points.length - Math.floor(windowSize / 2)) {
-      smoothed.push(points[i]);
+  for (let i = 0; i < targetPoints.length; i++) {
+    if (i < halfWindow || i >= targetPoints.length - halfWindow) {
+      smoothed.push(targetPoints[i]);
       continue;
     }
 
     let sumLat = 0;
     let sumLon = 0;
-    let count = 0;
 
-    for (let j = i - Math.floor(windowSize / 2); j <= i + Math.floor(windowSize / 2); j++) {
-      sumLat += points[j].latitude;
-      sumLon += points[j].longitude;
-      count++;
+    for (let j = i - halfWindow; j <= i + halfWindow; j++) {
+      sumLat += targetPoints[j].latitude;
+      sumLon += targetPoints[j].longitude;
     }
 
     smoothed.push({
-      ...points[i],
-      latitude: sumLat / count,
-      longitude: sumLon / count,
+      ...targetPoints[i],
+      latitude: sumLat / windowSize,
+      longitude: sumLon / windowSize,
     });
   }
 

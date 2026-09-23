@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -8,7 +8,7 @@ import {
   Platform,
   StatusBar,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors } from '../constants/theme';
 import { StatsSummary } from '../types';
@@ -29,9 +29,11 @@ export default function StatisticsScreen() {
   const [period, setPeriod] = useState<PeriodFilter>('all');
   const [stats, setStats] = useState<StatsSummary | null>(null);
 
-  useEffect(() => {
-    loadStats(period);
-  }, [period]);
+  useFocusEffect(
+    useCallback(() => {
+      loadStats(period);
+    }, [period])
+  );
 
   const loadStats = async (p: PeriodFilter) => {
     try {

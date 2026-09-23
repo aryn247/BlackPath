@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
-import { View, StyleSheet, Dimensions } from 'react-native';
-import Svg, { Path, Circle, Defs, Filter, FeGaussianBlur, FeMerge, FeMergeNode, G } from 'react-native-svg';
+import { View, StyleSheet, useWindowDimensions } from 'react-native';
+import Svg, { Path, Circle, G } from 'react-native-svg';
 import { GPSPoint } from '../types';
 import { Colors } from '../constants/theme';
 import { downsamplePath, pointsToBezierPath } from '../geo/smoothing';
@@ -18,12 +18,16 @@ interface PathRendererProps {
 export const PathRenderer: React.FC<PathRendererProps> = ({
   userPoints = [],
   peerPoints = [],
-  width = Dimensions.get('window').width,
-  height = Dimensions.get('window').height * 0.55,
+  width: customWidth,
+  height: customHeight,
   showGlow = true,
   showEndpoint = true,
   padding = 40,
 }) => {
+  const { width: windowWidth, height: windowHeight } = useWindowDimensions();
+  const width = customWidth || windowWidth;
+  const height = customHeight || windowHeight * 0.55;
+
   // Normalize GPS coordinates to Canvas pixel coordinates (x, y)
   const { userPathData, userEndpoint, peerPathData, peerEndpoint } = useMemo(() => {
     if (!userPoints || userPoints.length === 0) {
@@ -113,43 +117,35 @@ export const PathRenderer: React.FC<PathRendererProps> = ({
   return (
     <View style={[styles.container, { width, height }]}>
       <Svg width={width} height={height} style={StyleSheet.absoluteFill}>
-        <Defs>
-          {/* User White Path Glow Filter */}
-          <Filter id="userGlow" x="-20%" y="-20%" width="140%" height="140%">
-            <FeGaussianBlur stdDeviation="5" result="blur" />
-            <FeMerge>
-              <FeMergeNode in="blur" />
-              <FeMergeNode in="SourceGraphic" />
-            </FeMerge>
-          </Filter>
-
-          {/* Peer Violet Path Glow Filter */}
-          <Filter id="peerGlow" x="-20%" y="-20%" width="140%" height="140%">
-            <FeGaussianBlur stdDeviation="5" result="blur" />
-            <FeMerge>
-              <FeMergeNode in="blur" />
-              <FeMergeNode in="SourceGraphic" />
-            </FeMerge>
-          </Filter>
-        </Defs>
-
         <G>
           {/* Peer Glowing Violet Path (if walking together) */}
           {peerPathData !== '' && (
             <>
-              {/* Soft Outer Glow */}
+              {/* Layer 1: Wide Outer Glow */}
               {showGlow && (
                 <Path
                   d={peerPathData}
                   stroke={Colors.peerPathGlow}
-                  strokeWidth={8}
+                  strokeWidth={12}
                   strokeLinecap="round"
                   strokeLinejoin="round"
                   fill="none"
-                  filter="url(#peerGlow)"
+                  opacity={0.4}
                 />
               )}
-              {/* Bright Core Line */}
+              {/* Layer 2: Mid Glow */}
+              {showGlow && (
+                <Path
+                  d={peerPathData}
+                  stroke={Colors.peerPathGlow}
+                  strokeWidth={6}
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  fill="none"
+                  opacity={0.8}
+                />
+              )}
+              {/* Layer 3: Bright Core Line */}
               <Path
                 d={peerPathData}
                 stroke={Colors.peerPath}
@@ -177,20 +173,32 @@ export const PathRenderer: React.FC<PathRendererProps> = ({
             </>
           )}
 
-          {/* User Glowing White Path */}
-          {/* Soft Outer Glow */}
+          {/* User Glowing Cyan/White Path */}
+          {/* Layer 1: Wide Outer Glow */}
           {showGlow && (
             <Path
               d={userPathData}
               stroke={Colors.userPathGlow}
-              strokeWidth={10}
+              strokeWidth={14}
               strokeLinecap="round"
               strokeLinejoin="round"
               fill="none"
-              filter="url(#userGlow)"
+              opacity={0.4}
             />
           )}
-          {/* Core White Line */}
+          {/* Layer 2: Mid Glow */}
+          {showGlow && (
+            <Path
+              d={userPathData}
+              stroke={Colors.userPathGlow}
+              strokeWidth={7}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              fill="none"
+              opacity={0.8}
+            />
+          )}
+          {/* Layer 3: Core Neon Line */}
           <Path
             d={userPathData}
             stroke={Colors.userPath}

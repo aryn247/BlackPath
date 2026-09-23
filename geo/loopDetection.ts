@@ -37,31 +37,36 @@ export function detectLoop(
     return nullResult;
   }
 
-  const startPoint = points[0];
   const latestPoint = points[points.length - 1];
 
-  // Verify GPS accuracy at start and end
-  if (
-    (startPoint.accuracy && startPoint.accuracy > MAX_ALLOWABLE_GPS_ACCURACY) ||
-    (latestPoint.accuracy && latestPoint.accuracy > MAX_ALLOWABLE_GPS_ACCURACY)
-  ) {
+  if (latestPoint.accuracy && latestPoint.accuracy > MAX_ALLOWABLE_GPS_ACCURACY) {
     return nullResult;
   }
 
-  const distToStart = haversineDistance(
-    latestPoint.latitude,
-    latestPoint.longitude,
-    startPoint.latitude,
-    startPoint.longitude
-  );
+  // Scan initial start candidate region (first 25% of points) for loop closure
+  const candidateWindowEnd = Math.max(1, Math.floor(points.length * 0.25));
 
-  if (distToStart <= thresholdMeters) {
-    return {
-      isLoop: true,
-      closureDistanceMeters: distToStart,
-      startIndex: 0,
-      endIndex: points.length - 1,
-    };
+  for (let i = 0; i < candidateWindowEnd; i++) {
+    const candidateStart = points[i];
+    if (candidateStart.accuracy && candidateStart.accuracy > MAX_ALLOWABLE_GPS_ACCURACY) {
+      continue;
+    }
+
+    const distToStart = haversineDistance(
+      latestPoint.latitude,
+      latestPoint.longitude,
+      candidateStart.latitude,
+      candidateStart.longitude
+    );
+
+    if (distToStart <= thresholdMeters) {
+      return {
+        isLoop: true,
+        closureDistanceMeters: distToStart,
+        startIndex: i,
+        endIndex: points.length - 1,
+      };
+    }
   }
 
   return nullResult;

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { AppState, AppStateStatus } from 'react-native';
 import { GPSPoint, NearbyUser, WalkSession, WalkStatus } from '../types';
-import { calculatePace, calculateTotalDistance } from '../geo/distance';
+import { calculatePace, calculateTotalDistance, haversineDistance } from '../geo/distance';
 import { smoothPath } from '../geo/smoothing';
 import { detectLoop } from '../geo/loopDetection';
 import { calculateClosedLoopArea } from '../geo/area';
@@ -155,23 +155,30 @@ export const WalkStore = {
 
   /**
    * Reloads all GPS points saved to SQLite by background task while app was minimized.
+   * Merges SQLite points with in-memory points using timestamp deduplication to avoid race conditions.
    */
   syncBackgroundGPSPoints: async () => {
     if (globalWalkState.status !== 'walking' || !globalWalkState.sessionId) return;
 
     try {
       const activeSession = await getActiveSession();
-      if (activeSession && activeSession.points) {
-        const newPoints = activeSession.points;
-        const newDistance = calculateTotalDistance(newPoints);
-        const newSmoothed = smoothPath(newPoints, 3);
+      if (activeSession && activeSession.points && activeSession.points.length > 0) {
+        const existingMap = new Map(globalWalkState.points.map((p) => [p.timestamp, p]));
+        for (const pt of activeSession.points) {
+          if (!existingMap.has(pt.timestamp)) {
+            existingMap.set(pt.timestamp, pt);
+          }
+        }
+        const mergedPoints = Array.from(existingMap.values()).sort((a, b) => a.timestamp - b.timestamp);
+        const newDistance = calculateTotalDistance(mergedPoints);
+        const newSmoothed = smoothPath(mergedPoints, 3);
 
         const loopResult = detectLoop(newSmoothed, 25, 100);
         const newArea = loopResult.isLoop ? calculateClosedLoopArea(newSmoothed) : globalWalkState.areaClaimed;
 
         globalWalkState = {
           ...globalWalkState,
-          points: newPoints,
+          points: mergedPoints,
           smoothedPoints: newSmoothed,
           distance: newDistance,
           isLoopClosed: loopResult.isLoop,
@@ -236,13 +243,26 @@ export const WalkStore = {
   },
 
   /**
-   * Appends an incoming filtered GPS point to active session state.
+   * Appends an incoming filtered GPS point to active session state incrementally (O(1) complexity).
    */
   addPoint: (point: GPSPoint) => {
     if (globalWalkState.status !== 'walking') return;
 
-    const newPoints = [...globalWalkState.points, point];
-    const newDistance = calculateTotalDistance(newPoints);
+    const currentPoints = globalWalkState.points;
+    const lastPoint = currentPoints.length > 0 ? currentPoints[currentPoints.length - 1] : null;
+
+    let incrementalDist = 0;
+    if (lastPoint) {
+      incrementalDist = haversineDistance(
+        lastPoint.latitude,
+        lastPoint.longitude,
+        point.latitude,
+        point.longitude
+      );
+    }
+
+    const newPoints = [...currentPoints, point];
+    const newDistance = globalWalkState.distance + incrementalDist;
     const newSmoothed = smoothPath(newPoints, 3);
 
     const loopResult = detectLoop(newSmoothed, 25, 100);
@@ -283,7 +303,11 @@ export const WalkStore = {
       altitude: userPoint.altitude,
     };
 
-    globalWalkState.peerPoints = [...globalWalkState.peerPoints, peerPoint];
+    const updatedPeers = [...globalWalkState.peerPoints, peerPoint];
+    if (updatedPeers.length > 300) {
+      updatedPeers.shift();
+    }
+    globalWalkState.peerPoints = updatedPeers;
   },
 
   startSharedWalk: (peer: NearbyUser) => {

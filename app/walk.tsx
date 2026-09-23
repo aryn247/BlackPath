@@ -4,7 +4,7 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
-  Dimensions,
+  useWindowDimensions,
   Modal,
   ScrollView,
   Platform,
@@ -31,27 +31,33 @@ export default function WalkScreen() {
   const insets = useSafeAreaInsets();
   const walkState = useWalkStore();
   const settings = useSettingsStore();
+  const { width: windowWidth, height: windowHeight } = useWindowDimensions();
 
   const [savedSession, setSavedSession] = useState<WalkSession | null>(null);
   const [showSummaryModal, setShowSummaryModal] = useState(false);
   const [isStopping, setIsStopping] = useState(false);
 
-  const canvasWidth = Dimensions.get('window').width;
-  const canvasHeight = Dimensions.get('window').height * 0.48;
+  const canvasWidth = windowWidth;
+  const canvasHeight = windowHeight * 0.48;
 
   const topPadding = Math.max(insets.top, Platform.OS === 'android' ? (StatusBar.currentHeight || 24) : 0) + 8;
 
   // Handle Stop Walk Action
   const handleStopWalk = async () => {
     setIsStopping(true);
-    const session = await WalkStore.stopWalk();
-    setIsStopping(false);
-
-    if (session) {
-      setSavedSession(session);
-      setShowSummaryModal(true);
-    } else {
+    try {
+      const session = await WalkStore.stopWalk();
+      if (session) {
+        setSavedSession(session);
+        setShowSummaryModal(true);
+      } else {
+        router.replace('/');
+      }
+    } catch (e) {
+      console.error('Error stopping walk:', e);
       router.replace('/');
+    } finally {
+      setIsStopping(false);
     }
   };
 
@@ -151,7 +157,7 @@ export default function WalkScreen() {
               <View style={styles.summaryPathPreview}>
                 <PathRenderer
                   userPoints={savedSession.points}
-                  width={Dimensions.get('window').width - 48}
+                  width={windowWidth - 48}
                   height={180}
                   showGlow={true}
                   showEndpoint={false}
