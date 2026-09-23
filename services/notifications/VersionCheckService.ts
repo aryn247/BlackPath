@@ -9,7 +9,7 @@ export interface VersionInfo {
 }
 
 const VERSION_CHECK_URL = 'https://aryn247.github.io/Self-Portfolio/blackpath_version.json';
-const CURRENT_VERSION_CODE = 3;
+const CURRENT_VERSION_CODE = 4;
 
 export class VersionCheckService {
   /**
