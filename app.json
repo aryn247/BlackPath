@@ -20,7 +20,6 @@
         "NSLocationWhenInUseUsageDescription": "BlackPath uses your location to draw your glowing path on the black screen.",
         "NSLocationAlwaysAndWhenInUseUsageDescription": "BlackPath continues tracking your path when the app is minimized.",
         "NSBluetoothAlwaysUsageDescription": "BlackPath uses Bluetooth Low Energy to discover nearby walkers serverlessly.",
-        "ITSAppUsesNonExemptEncryption": false,
         "UIBackgroundModes": [
           "location",
           "bluetooth-central",
