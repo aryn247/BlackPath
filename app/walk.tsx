@@ -146,7 +146,7 @@ export default function WalkScreen() {
         visible={showSummaryModal}
         transparent={false}
         animationType="slide"
-        onRequestClose={handleSaveSummary}
+        onRequestClose={handleDiscardSummary}
       >
         <View style={[styles.summaryContainer, { paddingTop: topPadding }]}>
           <ScrollView contentContainerStyle={styles.summaryContent} showsVerticalScrollIndicator={false}>

@@ -22,6 +22,10 @@ import { Ionicons } from '@expo/vector-icons';
 
 import { BottomNav } from '../components/BottomNav';
 
+// L4 Fix: Single source of truth for the APK download URL
+const APK_DOWNLOAD_URL = 'https://github.com/aryn247/BlackPath/raw/main/BlackPath.apk';
+
+
 export default function SettingsScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -101,8 +105,8 @@ export default function SettingsScreen() {
   const handleShareApp = async () => {
     try {
       await Share.share({
-        message: 'Download BlackPath V1.0.3 - Private Serverless Walk Tracking App: https://github.com/aryn247/BlackPath/raw/main/BlackPath.apk',
-        url: 'https://github.com/aryn247/BlackPath/raw/main/BlackPath.apk',
+        message: `Download BlackPath V1.0.3 - Private Serverless Walk Tracking App: ${APK_DOWNLOAD_URL}`,
+        url: APK_DOWNLOAD_URL,
       });
     } catch (e) {
       console.warn('Share error:', e);
@@ -130,7 +134,7 @@ export default function SettingsScreen() {
 
             <View style={styles.qrContainer}>
               <QRCode
-                value="https://github.com/aryn247/BlackPath/raw/main/BlackPath.apk"
+                value={APK_DOWNLOAD_URL}
                 size={160}
                 backgroundColor="#FFFFFF"
                 color="#000000"

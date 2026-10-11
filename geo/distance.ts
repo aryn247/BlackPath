@@ -48,6 +48,8 @@ export function calculateTotalDistance(points: GPSPoint[]): number {
 
 /**
  * Calculates pace in seconds per kilometer (or seconds per mile).
+ * L6 Fix: Capped at 3600 sec/unit (60 min/km) to prevent garbage values
+ * when distance is near-zero but technically > 0.
  */
 export function calculatePace(
   distanceMeters: number,
@@ -60,7 +62,10 @@ export function calculatePace(
     unit === 'mi' ? distanceMeters / 1609.344 : distanceMeters / 1000;
 
   if (distanceInUnits === 0) return 0;
-  return durationSeconds / distanceInUnits;
+
+  const pace = durationSeconds / distanceInUnits;
+  // Cap at 3600 sec/unit (60 min/km or 60 min/mi) — anything beyond is "standing still"
+  return Math.min(pace, 3600);
 }
 
 /**
@@ -80,9 +85,11 @@ export function formatPace(paceSeconds: number, unit: UnitSystem = 'km'): string
 
 /**
  * Formats seconds into digital timer display "HH:MM:SS" or "MM:SS".
+ * L5 Fix: Explicitly check isNaN separately from the < 0 check so that
+ * formatDuration(0) returns '00:00' while NaN inputs are cleanly caught.
  */
 export function formatDuration(seconds: number): string {
-  if (!seconds || seconds < 0) return '00:00';
+  if (isNaN(seconds) || seconds < 0) return '00:00';
 
   const hrs = Math.floor(seconds / 3600);
   const mins = Math.floor((seconds % 3600) / 60);

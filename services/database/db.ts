@@ -156,24 +156,33 @@ export async function completeSession(
       ]
     );
 
-    // Save any remaining unpersisted points
-    for (const pt of points) {
-      const ptId = pt.id || `${session.id}_${pt.timestamp}_${Math.random().toString(36).substring(2, 7)}`;
-      await db.runAsync(
-        `INSERT OR IGNORE INTO gps_points 
-          (id, sessionId, latitude, longitude, timestamp, accuracy, speed, altitude)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?);`,
-        [
-          ptId,
-          session.id,
-          pt.latitude,
-          pt.longitude,
-          pt.timestamp,
-          pt.accuracy ?? null,
-          pt.speed ?? null,
-          pt.altitude ?? null,
-        ]
-      );
+    // M3 Fix: Batch-insert all points in a single statement instead of N sequential awaits
+    if (points.length > 0) {
+      const BATCH_SIZE = 100;
+      for (let i = 0; i < points.length; i += BATCH_SIZE) {
+        const batch = points.slice(i, i + BATCH_SIZE);
+        const placeholders = batch.map(() => '(?, ?, ?, ?, ?, ?, ?, ?)').join(', ');
+        const values: (string | number | null)[] = [];
+        for (const pt of batch) {
+          const ptId = pt.id || `${session.id}_${pt.timestamp}`;
+          values.push(
+            ptId,
+            session.id,
+            pt.latitude,
+            pt.longitude,
+            pt.timestamp,
+            pt.accuracy ?? null,
+            pt.speed ?? null,
+            pt.altitude ?? null
+          );
+        }
+        await db.runAsync(
+          `INSERT OR IGNORE INTO gps_points 
+            (id, sessionId, latitude, longitude, timestamp, accuracy, speed, altitude)
+           VALUES ${placeholders};`,
+          values
+        );
+      }
     }
   });
 }
@@ -308,19 +317,22 @@ export async function deleteAllHistory(): Promise<void> {
 export async function getStatsSummary(period: 'today' | 'week' | 'month' | 'all' = 'all'): Promise<StatsSummary> {
   const db = await getDatabase();
 
+  // Build filter using parameterized queries (M1: avoid SQL string interpolation)
   let timeFilterClause = `WHERE status = 'completed'`;
+  const queryParams: number[] = [];
   const now = Date.now();
 
   if (period === 'today') {
     const startOfDay = new Date();
     startOfDay.setHours(0, 0, 0, 0);
-    timeFilterClause += ` AND startedAt >= ${startOfDay.getTime()}`;
+    timeFilterClause += ` AND startedAt >= ?`;
+    queryParams.push(startOfDay.getTime());
   } else if (period === 'week') {
-    const startOfWeek = now - 7 * 24 * 60 * 60 * 1000;
-    timeFilterClause += ` AND startedAt >= ${startOfWeek}`;
+    timeFilterClause += ` AND startedAt >= ?`;
+    queryParams.push(now - 7 * 24 * 60 * 60 * 1000);
   } else if (period === 'month') {
-    const startOfMonth = now - 30 * 24 * 60 * 60 * 1000;
-    timeFilterClause += ` AND startedAt >= ${startOfMonth}`;
+    timeFilterClause += ` AND startedAt >= ?`;
+    queryParams.push(now - 30 * 24 * 60 * 60 * 1000);
   }
 
   const sessionStats = await db.getFirstAsync<{
@@ -329,15 +341,16 @@ export async function getStatsSummary(period: 'today' | 'week' | 'month' | 'all'
     totalPaths: number;
     biggestArea: number;
     longestPath: number;
-  }>(`
-    SELECT 
+  }>(
+    `SELECT 
       COALESCE(SUM(distance), 0) AS totalDistance,
       COALESCE(SUM(areaClaimed), 0) AS totalAreaClaimed,
       COUNT(id) AS totalPaths,
       COALESCE(MAX(areaClaimed), 0) AS biggestArea,
       COALESCE(MAX(distance), 0) AS longestPath
-    FROM sessions ${timeFilterClause};
-  `);
+    FROM sessions ${timeFilterClause};`,
+    queryParams
+  );
 
   const nearbyStats = await db.getFirstAsync<{ count: number }>(
     `SELECT COUNT(*) as count FROM nearby_users;`

@@ -19,7 +19,9 @@ import { PathRenderer } from '../../components/PathRenderer';
 import { Ionicons } from '@expo/vector-icons';
 
 export default function SessionDetailScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const params = useLocalSearchParams<{ id: string | string[] }>();
+  // M5 Fix: useLocalSearchParams can return string[] in Expo Router — always normalize to string
+  const id = Array.isArray(params.id) ? params.id[0] : params.id;
   const router = useRouter();
   const settings = useSettingsStore();
 

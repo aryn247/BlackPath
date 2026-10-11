@@ -57,7 +57,8 @@ export function useSettingsStore(): UserSettings {
   const [settings, setSettings] = useState<UserSettings>(SettingsStore.getSettings());
 
   useEffect(() => {
-    SettingsStore.loadSettings();
+    // L2 Fix: Don't call loadSettings() here — it runs once at app root in _layout.tsx.
+    // Just subscribe to state updates from here.
     const unsubscribe = SettingsStore.subscribe(setSettings);
     return () => {
       unsubscribe();

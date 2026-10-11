@@ -198,7 +198,9 @@ export const WalkStore = {
   startWalk: async (): Promise<boolean> => {
     setupAppStateListener();
 
-    const sessionId = `session_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+    // M4 Fix: Use crypto-quality UUID instead of Math.random to avoid ID collisions
+    const { randomUUID } = await import('expo-crypto');
+    const sessionId = `session_${randomUUID()}`;
     const startedAt = Date.now();
 
     // PERSIST ACTIVE SESSION IMMEDIATELY IN SQLITE
@@ -375,19 +377,20 @@ export const WalkStore = {
     await LocationService.stopTracking();
     BLEService.stopBLESession();
 
-    // Re-sync final points from SQLite
+    // Re-sync final points from SQLite (merge without race, already fixed in C2)
     await WalkStore.syncBackgroundGPSPoints();
 
-    const finalPoints = globalWalkState.smoothedPoints.length > 0
-      ? globalWalkState.smoothedPoints
-      : globalWalkState.points;
-
-    const finalDistance = calculateTotalDistance(finalPoints);
+    // C3 Fix: Use raw (unsmoothed) points for final storage and pathLength.
+    // Use the incrementally-accumulated distance from globalWalkState.distance
+    // instead of re-calculating from smoothed/downsampled points, which could
+    // differ from actual distance due to smoothing artifacts.
+    const finalPoints = globalWalkState.points;
+    const finalDistance = globalWalkState.distance; // already accumulated incrementally
     const finalDuration = Math.max(0, Math.floor((Date.now() - globalWalkState.startedAt) / 1000));
     const finalPace = calculatePace(finalDistance, finalDuration, 'km');
 
-    const loopResult = detectLoop(finalPoints, 25, 100);
-    const finalArea = loopResult.isLoop ? calculateClosedLoopArea(finalPoints) : globalWalkState.areaClaimed;
+    const loopResult = detectLoop(globalWalkState.smoothedPoints.length > 0 ? globalWalkState.smoothedPoints : finalPoints, 25, 100);
+    const finalArea = loopResult.isLoop ? calculateClosedLoopArea(globalWalkState.smoothedPoints.length > 0 ? globalWalkState.smoothedPoints : finalPoints) : globalWalkState.areaClaimed;
 
     const session: WalkSession = {
       id: globalWalkState.sessionId,

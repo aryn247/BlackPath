@@ -1,5 +1,5 @@
 import { Alert, Linking } from 'react-native';
-import Constants from 'expo-constants';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export interface VersionInfo {
   versionCode: number;
@@ -10,15 +10,28 @@ export interface VersionInfo {
 
 const VERSION_CHECK_URL = 'https://aryn247.github.io/Self-Portfolio/blackpath_version.json';
 const CURRENT_VERSION_CODE = 4;
+const CACHE_KEY = 'blackpath_last_version_check';
+const CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
 
 export class VersionCheckService {
   /**
-   * Checks remote version JSON on app launch (serverless static endpoint).
+   * Checks remote version JSON at most once per 24 hours (M7: cached throttle).
+   * Silently skips if checked recently or offline.
    */
   static async checkForUpdates(): Promise<void> {
     try {
+      // M7 Fix: Only check once every 24 hours — don't hammer network on every launch
+      const lastCheckStr = await AsyncStorage.getItem(CACHE_KEY);
+      if (lastCheckStr) {
+        const lastCheck = parseInt(lastCheckStr, 10);
+        if (Date.now() - lastCheck < CACHE_TTL_MS) return;
+      }
+
       const response = await fetch(VERSION_CHECK_URL);
       if (!response.ok) return;
+
+      // Mark as checked now, before processing — avoids repeated prompts if fetch is slow
+      await AsyncStorage.setItem(CACHE_KEY, String(Date.now()));
 
       const info: VersionInfo = await response.json();
 
