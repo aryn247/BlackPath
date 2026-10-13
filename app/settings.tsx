@@ -105,7 +105,7 @@ export default function SettingsScreen() {
   const handleShareApp = async () => {
     try {
       await Share.share({
-        message: `Download BlackPath V1.0.3 - Private Serverless Walk Tracking App: ${APK_DOWNLOAD_URL}`,
+        message: `Download BlackPath V2.0.0 - Private Serverless Walk Tracking App: ${APK_DOWNLOAD_URL}`,
         url: APK_DOWNLOAD_URL,
       });
     } catch (e) {
@@ -274,7 +274,7 @@ export default function SettingsScreen() {
 
         {/* About */}
         <View style={styles.aboutContainer}>
-          <Text style={styles.aboutText}>BlackPath v1.0.3</Text>
+          <Text style={styles.aboutText}>BlackPath v2.0.0</Text>
           <Text style={styles.aboutSub}>Serverless • Privacy-First • Offline</Text>
         </View>
       </ScrollView>

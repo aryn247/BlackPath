@@ -9,7 +9,7 @@ export interface VersionInfo {
 }
 
 const VERSION_CHECK_URL = 'https://aryn247.github.io/Self-Portfolio/blackpath_version.json';
-const CURRENT_VERSION_CODE = 4;
+const CURRENT_VERSION_CODE = 5;
 const CACHE_KEY = 'blackpath_last_version_check';
 const CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
 
